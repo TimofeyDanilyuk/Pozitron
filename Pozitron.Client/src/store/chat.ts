@@ -38,7 +38,7 @@ export const useChatStore = defineStore('chat', {
       const token = auth.token;
 
       this.connection = new signalR.HubConnectionBuilder()
-        .withUrl('https://very-momentum-latin-thousand.trycloudflare.com/hubs/chat', {
+        .withUrl('https://pozitron-production.up.railway.app/hubs/chat', {
           accessTokenFactory: () => token
         })
         .withAutomaticReconnect()

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://very-momentum-latin-thousand.trycloudflare.com'
+  baseURL: 'https://pozitron-production.up.railway.app/api'
 });
 
 api.interceptors.request.use(config => {
