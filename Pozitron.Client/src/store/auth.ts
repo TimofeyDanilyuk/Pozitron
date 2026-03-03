@@ -39,6 +39,37 @@ export const useAuthStore = defineStore('auth', {
       this.user = null;
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+    },
+
+    async uploadAvatar(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+      try {
+          const { data } = await api.post('/user/upload-avatar', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+          });
+          if (this.user) {
+              this.user.avatarUrl = data.avatarUrl;
+              localStorage.setItem('user', JSON.stringify(this.user));
+          }
+            return data.avatarUrl;
+          } catch (error) {
+              throw error;
+          }
+    },
+
+    async updateProfile(profileData: { emojiPrefix?: string, displayName?: string }) {
+        try {
+            const { data } = await api.patch('/user/profile', profileData);
+            if (this.user) {
+                this.user.emojiPrefix = data.emojiPrefix;
+                this.user.displayName = data.displayName;
+                localStorage.setItem('user', JSON.stringify(this.user));
+            }
+        } catch (error) {
+            throw error;
+        }
     }
   }
 });

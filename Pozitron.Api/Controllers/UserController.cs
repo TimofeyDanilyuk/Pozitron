@@ -26,35 +26,42 @@ namespace Pozitron.Api.Controllers
         [HttpPost("upload-avatar")]
         public async Task<IActionResult> UploadAvatar(IFormFile file)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest("Файл не выбран");
-
-            var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".gif" };
-            var extension = Path.GetExtension(file.FileName).ToLower();
-            if (!allowedExtensions.Contains(extension))
-                return BadRequest("Недопустимый формат файла");
-
-            var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null) return NotFound();
-
-            var folderPath = Path.Combine(_environment.WebRootPath, "uploads", "avatars");
-            if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
-
-            var fileName = $"{userId}_{DateTime.UtcNow.Ticks}{extension}";
-            var filePath = Path.Combine(folderPath, fileName);
-
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            try 
             {
-                await file.CopyToAsync(stream);
+                if (file == null || file.Length == 0) return BadRequest("Файл не выбран");
+
+                var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+                var folderPath = Path.Combine(rootPath, "uploads", "avatars");
+
+                if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+
+                var extension = Path.GetExtension(file.FileName).ToLower();
+                var fileName = $"{Guid.NewGuid()}{extension}";
+                var filePath = Path.Combine(folderPath, fileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                var baseUrl = $"{Request.Scheme}://{Request.Host}";
+                var avatarUrl = $"{baseUrl}/uploads/avatars/{fileName}";
+
+                var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+                var user = await _context.Users.FindAsync(userId);
+                
+                if (user == null) return NotFound("Пользователь не найден");
+
+                user.AvatarUrl = avatarUrl;
+                await _context.SaveChangesAsync();
+
+                return Ok(new { avatarUrl });
             }
-
-            var baseUrl = $"{Request.Scheme}://{Request.Host}";
-            user.AvatarUrl = $"{baseUrl}/uploads/avatars/{fileName}";
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new { avatarUrl = user.AvatarUrl });
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ОШИБКА ЗАГРУЗКИ: {ex.Message}");
+                return StatusCode(500, $"Ошибка на сервере: {ex.Message}");
+            }
         }
 
         [HttpPatch("profile")]

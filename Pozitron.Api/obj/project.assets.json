@@ -2849,23 +2849,23 @@
     ]
   },
   "packageFolders": {
-    "C:\\Users\\daniliuk\\.nuget\\packages\\": {},
+    "C:\\Users\\timbilding\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "D:\\Новая папка (2)\\Pozitron\\Pozitron.Api\\Pozitron.Api.csproj",
+      "projectUniqueName": "D:\\Git\\Pozitron\\Pozitron.Api\\Pozitron.Api.csproj",
       "projectName": "Pozitron.Api",
-      "projectPath": "D:\\Новая папка (2)\\Pozitron\\Pozitron.Api\\Pozitron.Api.csproj",
-      "packagesPath": "C:\\Users\\daniliuk\\.nuget\\packages\\",
-      "outputPath": "D:\\Новая папка (2)\\Pozitron\\Pozitron.Api\\obj\\",
+      "projectPath": "D:\\Git\\Pozitron\\Pozitron.Api\\Pozitron.Api.csproj",
+      "packagesPath": "C:\\Users\\timbilding\\.nuget\\packages\\",
+      "outputPath": "D:\\Git\\Pozitron\\Pozitron.Api\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\daniliuk\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\timbilding\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -2945,7 +2945,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.103/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.AspNetCore": "(,10.0.32767]",
           "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",

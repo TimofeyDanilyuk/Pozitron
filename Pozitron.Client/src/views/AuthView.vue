@@ -38,8 +38,13 @@ const handleSubmit = async () => {
     
     <div class="bg-white/90 dark:bg-slate-800/90 backdrop-blur-md p-8 rounded-3xl shadow-2xl w-full max-w-md border border-white/20">
       
-      <div >
-        <img src="../assets/logo.png" alt="Pozitron Logo">
+      <div class="flex justify-center mb-8 pointer-events-none select-none">
+        <img 
+          src="../assets/logo.png" 
+          alt="Pozitron Logo"
+          draggable="false"
+          class="w-95 h-auto object-contain outline-hidden active:outline-hidden focus:outline-hidden"
+        >
       </div>
 
       <div v-if="error" class="mb-4 p-3 bg-red-100 border-l-4 border-red-500 text-red-700 text-sm rounded">
@@ -48,14 +53,14 @@ const handleSubmit = async () => {
 
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Юзернейм</label>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Username</label>
           <input v-model="username" type="text" required
             class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-purple-500 outline-none transition-all dark:text-white"
             placeholder="Введите ник...">
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Пароль</label>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
           <input v-model="password" type="password" required
             class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-purple-500 outline-none transition-all dark:text-white"
             placeholder="••••••••">
