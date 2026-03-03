@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Pozitron.Api.Data;
+using Pozitron.Api.Entitites;
+using Pozitron.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,12 +48,42 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings["Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+                context.Token = accessToken;
+            return Task.CompletedTask;
+        }
+    };
 });
 
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+    
+    if (!db.Chats.Any(c => c.Type == ChatType.General))
+    {
+        db.Chats.Add(new Chat 
+        { 
+            Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+            Type = ChatType.General, 
+            Name = "Общий канал" 
+        });
+        db.SaveChanges();
+    }
+}
+
+app.UseDefaultFiles();
 app.UseStaticFiles();
 app.UseRouting();
 
@@ -68,4 +100,6 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
+app.MapFallbackToFile("index.html");
 app.Run();

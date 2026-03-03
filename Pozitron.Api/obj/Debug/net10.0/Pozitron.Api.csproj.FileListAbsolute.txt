@@ -157,3 +157,9 @@ D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\Pozitron.Api.pdb
 D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\Pozitron.Api.genruntimeconfig.cache
 D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\ref\Pozitron.Api.dll
 D:\Git\Pozitron\Pozitron.Api\bin\Debug\net10.0\Pozitron.Api.staticwebassets.runtime.json
+D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\compressed\cat42y54vj-{0}-y7k69hldv1-y7k69hldv1.gz
+D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\compressed\dll7f5xz05-{0}-aqgvs68aij-aqgvs68aij.gz
+D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\compressed\7ftz083mhh-{0}-85vnv1zhp8-85vnv1zhp8.gz
+D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\compressed\gcuge0ihtu-{0}-gxi3g5j7qb-gxi3g5j7qb.gz
+D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\compressed\pn8iqzti6y-{0}-3lc9anbcyv-3lc9anbcyv.gz
+D:\Git\Pozitron\Pozitron.Api\obj\Debug\net10.0\compressed\mvvudxrbwc-{0}-69kjnsiwqx-69kjnsiwqx.gz

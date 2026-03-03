@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Pozitron.Api.Data;
 
 namespace Pozitron.Api.Controllers
@@ -79,7 +80,28 @@ namespace Pozitron.Api.Controllers
             await _context.SaveChangesAsync();
             return Ok(user);
         }
+
+        [HttpPatch("username")]
+        public async Task<IActionResult> ChangeUsername([FromBody] ChangeUsernameRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 3)
+                return BadRequest("Ник должен быть не короче 3 символов");
+
+            if (_context.Users.Any(u => u.Username == request.Username))
+                return BadRequest("Этот ник уже занят");
+
+            var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null) return NotFound();
+
+            user.Username = request.Username;
+            user.DisplayName = request.Username;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { user.Id, user.Username, user.EmojiPrefix, user.AvatarUrl });
+        }
     }
 
+    public record ChangeUsernameRequest(string Username);
     public record UpdateProfileRequest(string? DisplayName, string? EmojiPrefix, string? AvatarUrl);
 }

@@ -13,6 +13,8 @@ namespace Pozitron.Api.Data
 
         public DbSet<User> Users => Set<User>();
         public DbSet<Message> Messages => Set<Message>();
+        public DbSet<Chat> Chats => Set<Chat>();
+        public DbSet<ChatMember> ChatMembers => Set<ChatMember>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -24,6 +26,14 @@ namespace Pozitron.Api.Data
                 .HasOne<User>(m => m.User)
                 .WithMany(u => u.Messages)
                 .HasForeignKey(m => m.UserId); ;
+
+            modelBuilder.Entity<ChatMember>()
+                .HasKey(cm => new { cm.ChatId, cm.UserId });
+
+            modelBuilder.Entity<Chat>()
+                .HasMany(c => c.Messages)
+                .WithOne(m => m.Chat)
+                .HasForeignKey(m => m.ChatId);    
         }
     }
 }

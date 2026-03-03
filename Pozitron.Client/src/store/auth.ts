@@ -70,6 +70,14 @@ export const useAuthStore = defineStore('auth', {
         } catch (error) {
             throw error;
         }
+    },
+
+    async changeUsername(username: string) {
+    const { data } = await api.patch('/user/username', { username });
+    if (this.user) {
+        this.user.username = data.username;
+        localStorage.setItem('user', JSON.stringify(this.user));
     }
+}
   }
 });
