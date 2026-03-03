@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Pozitron.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a542e18ad3d6f53841637224c3d5ceb34ec97206")]
 [assembly: System.Reflection.AssemblyProductAttribute("Pozitron.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Pozitron.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

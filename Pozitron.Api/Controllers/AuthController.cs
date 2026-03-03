@@ -1,0 +1,98 @@
+using System;
+using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
+using System.Security.Claims;
+using System.Text;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity.Data;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Pozitron.Api.Data;
+using Pozitron.Api.Entitites;
+using BC = BCrypt.Net.BCrypt;
+
+namespace Pozitron.Api.Controllers
+{
+    [ApiController]
+    [Route("api/[controller]")]
+    public class AuthController : ControllerBase
+    {
+        private readonly AppDbContext _context;
+        private readonly IConfiguration _configuration;
+
+        public AuthController(AppDbContext context, IConfiguration configuration)
+        {
+            _context = context;
+            _configuration = configuration;
+        }
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        {
+            if (await _context.Users.AnyAsync(u => u.Username == request.Username))
+            {
+                return BadRequest("Этот ник уже занят, выбери другой.");
+            }
+
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Username = request.Username,
+                PasswordHash = BC.HashPassword(request.Password),
+                DisplayName = request.Username,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Регистрация успешна!", userId = user.Id });
+        }
+
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+
+            if (user == null || !BC.Verify(request.Password, user.PasswordHash))
+                return Unauthorized("Неверный логин или пароль");
+
+            var token = GenerateJwtToken(user);
+
+            return Ok(new
+            {
+                Token = token,
+                User = new { user.Id, user.Username, user.EmojiPrefix, user.AvatarUrl }
+            });
+        }
+
+        private string GenerateJwtToken(User user)
+        {
+            var jwtSettings = _configuration.GetSection("Jwt");
+            var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
+
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[]
+                {
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new Claim(ClaimTypes.Name, user.Username)
+                }),
+                Expires = DateTime.UtcNow.AddDays(7),
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature),
+                Issuer = jwtSettings["Issuer"],
+                Audience = jwtSettings["Audience"]
+            };
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
+        }
+    }
+
+    public record RegisterRequest(string Username, string Password);
+    public record LoginRequest(string Username, string Password);
+}
