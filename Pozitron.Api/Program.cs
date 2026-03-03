@@ -8,8 +8,6 @@ using Pozitron.Api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
-
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite("Data Source=pozitron.db"));
 
@@ -91,11 +89,6 @@ app.UseCors("AllowVite");
 
 app.UseAuthentication();
 app.UseAuthorization();
-
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-}
 
 app.UseHttpsRedirection();
 
