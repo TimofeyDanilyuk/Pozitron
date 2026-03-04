@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Pozitron.Api.Data;
 using Pozitron.Api.Entitites;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
+using Pozitron.Api.Hubs;
 
 [Authorize]
 [ApiController]
@@ -11,10 +13,15 @@ using Microsoft.EntityFrameworkCore;
 public class ChatController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly IHubContext<ChatHub> _hub;
 
-    public ChatController(AppDbContext context) => _context = context;
+    public ChatController(AppDbContext context, IHubContext<ChatHub> hub)
+    {
+        _context = context;
+        _hub = hub;
+    }
 
-    private Guid CurrentUserId => 
+    private Guid CurrentUserId =>
         Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
     // Получить все чаты текущего пользователя + общий канал
@@ -97,7 +104,6 @@ public class ChatController : ControllerBase
     {
         var userId = CurrentUserId;
 
-        // Ищем существующий DM между двумя пользователями
         var existing = await _context.ChatMembers
             .Where(cm => cm.UserId == userId)
             .Select(cm => cm.ChatId)
@@ -113,13 +119,45 @@ public class ChatController : ControllerBase
         if (targetChats != null)
             return Ok(new { id = targetChats.Id });
 
-        // Создаём новый DM
+        // Создаём новый 
         var chat = new Chat { Id = Guid.NewGuid(), Type = ChatType.Direct };
         chat.Members.Add(new ChatMember { ChatId = chat.Id, UserId = userId });
         chat.Members.Add(new ChatMember { ChatId = chat.Id, UserId = targetUserId });
 
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
+
+        // Получаем данные обоих пользователей для уведомления
+        var currentUser = await _context.Users.FindAsync(userId);
+        var targetUser = await _context.Users.FindAsync(targetUserId);
+
+        // Уведомляем второго пользователя что у него новый DM
+        var targetUserIdStr = targetUserId.ToString();
+        if (ChatHub.OnlineUsers.TryGetValue(targetUserIdStr, out var targetConnectionId))
+        {
+            await _hub.Clients.Client(targetConnectionId).SendAsync("NewDmChat", new
+            {
+                id = chat.Id,
+                type = ChatType.Direct,
+                name = currentUser?.Username,
+                avatarUrl = currentUser?.AvatarUrl,
+                lastMessage = (string?)null
+            });
+        }
+
+        // Уведомляем и самого инициатора (на случай нескольких вкладок)
+        var currentUserIdStr = userId.ToString();
+        if (ChatHub.OnlineUsers.TryGetValue(currentUserIdStr, out var currentConnectionId))
+        {
+            await _hub.Clients.Client(currentConnectionId).SendAsync("NewDmChat", new
+            {
+                id = chat.Id,
+                type = ChatType.Direct,
+                name = targetUser?.Username,
+                avatarUrl = targetUser?.AvatarUrl,
+                lastMessage = (string?)null
+            });
+        }
 
         return Ok(new { id = chat.Id });
     }
@@ -130,7 +168,7 @@ public class ChatController : ControllerBase
     {
         var userId = CurrentUserId;
         var query = _context.Users.Where(u => u.Id != userId);
-        
+
         if (!string.IsNullOrEmpty(search))
             query = query.Where(u => u.Username.Contains(search));
 

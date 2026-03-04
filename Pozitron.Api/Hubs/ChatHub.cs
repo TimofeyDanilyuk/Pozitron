@@ -11,8 +11,7 @@ namespace Pozitron.Api.Hubs;
 public class ChatHub : Hub
 {
     private readonly AppDbContext _context;
-    // Онлайн пользователи: userId -> connectionId
-    private static readonly ConcurrentDictionary<string, string> _onlineUsers = new();
+    public static readonly ConcurrentDictionary<string, string> OnlineUsers = new();
 
     public ChatHub(AppDbContext context) => _context = context;
 
@@ -21,10 +20,10 @@ public class ChatHub : Hub
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (userId != null)
         {
-            _onlineUsers[userId] = Context.ConnectionId;
+            OnlineUsers[userId] = Context.ConnectionId;
             await Clients.All.SendAsync("UserOnline", userId);
             // Отправляем новому клиенту список онлайн
-            await Clients.Caller.SendAsync("OnlineUsers", _onlineUsers.Keys.ToList());
+            await Clients.Caller.SendAsync("OnlineUsers", OnlineUsers.Keys.ToList());
         }
         await base.OnConnectedAsync();
     }
@@ -34,7 +33,7 @@ public class ChatHub : Hub
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (userId != null)
         {
-            _onlineUsers.TryRemove(userId, out _);
+            OnlineUsers.TryRemove(userId, out _);
             await Clients.All.SendAsync("UserOffline", userId);
         }
         await base.OnDisconnectedAsync(exception);

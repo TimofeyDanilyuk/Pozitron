@@ -65,7 +65,28 @@ export const useChatStore = defineStore('chat', {
         this.onlineUsers = this.onlineUsers.filter(id => id !== userId);
       });
 
+      this.connection.on('NewDmChat', (chat: Chat) => {
+      if (!this.chats.find(c => c.id === chat.id)) {
+          this.chats.push(chat);
+      }
+      });
+
       await this.connection.start();
+
+      document.addEventListener('visibilitychange', async () => {
+        if (document.visibilityState === 'visible') {
+          if (this.connection?.state === signalR.HubConnectionState.Disconnected) {
+            await this.connection.start();
+            if (this.activeChat) {
+              await this.connection.invoke('JoinChat', this.activeChat.id);
+            }
+            if (this.activeChat) {
+              const { data } = await api.get(`/chat/${this.activeChat.id}/messages`);
+              this.messages[this.activeChat.id] = data;
+            }
+          }
+        }
+      });
     },
 
     async disconnect() {
