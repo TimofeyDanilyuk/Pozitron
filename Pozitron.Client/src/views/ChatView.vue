@@ -294,7 +294,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       <div class="p-4 border-t border-slate-800 shrink-0">
         <div class="relative">
           <input v-model="searchQuery" @input="onSearch" type="text"
-                 placeholder="Найти пользователя для DM..."
+                 placeholder="Найти пользователя..."
                  class="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-purple-500/50 transition-all select-text">
 
           <!-- Дропдаун с результатами поиска -->
