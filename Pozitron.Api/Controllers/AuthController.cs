@@ -32,10 +32,11 @@ namespace Pozitron.Api.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.SecurityQuestion) || string.IsNullOrWhiteSpace(request.SecurityAnswer))
+                return BadRequest("Укажи секретный вопрос и ответ.");
+
             if (await _context.Users.AnyAsync(u => u.Username == request.Username))
-            {
                 return BadRequest("Этот ник уже занят, выбери другой.");
-            }
 
             var user = new User
             {
@@ -43,6 +44,8 @@ namespace Pozitron.Api.Controllers
                 Username = request.Username,
                 PasswordHash = BC.HashPassword(request.Password),
                 DisplayName = request.Username,
+                SecurityQuestion = request.SecurityQuestion,
+                SecurityAnswerHash = BC.HashPassword(request.SecurityAnswer.ToLower().Trim()),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -69,6 +72,35 @@ namespace Pozitron.Api.Controllers
             });
         }
 
+        [HttpGet("question/{username}")]
+        public async Task<IActionResult> GetQuestion(string username)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == username);
+            if (user == null) return NotFound("Пользователь не найден.");
+            if (string.IsNullOrEmpty(user.SecurityQuestion))
+                return BadRequest("У этого пользователя не задан секретный вопрос.");
+
+            return Ok(new { question = user.SecurityQuestion });
+        }
+
+        [HttpPost("recover")]
+        public async Task<IActionResult> Recover([FromBody] RecoverRequest request)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+            if (user == null) return NotFound("Пользователь не найден.");
+
+            if (string.IsNullOrEmpty(user.SecurityAnswerHash))
+                return BadRequest("У этого пользователя не задан секретный вопрос.");
+
+            if (!BC.Verify(request.SecurityAnswer.ToLower().Trim(), user.SecurityAnswerHash))
+                return BadRequest("Неверный ответ на секретный вопрос.");
+
+            user.PasswordHash = BC.HashPassword(request.NewPassword);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Пароль успешно изменён!" });
+        }
+
         private string GenerateJwtToken(User user)
         {
             var jwtSettings = _configuration.GetSection("Jwt");
@@ -93,6 +125,7 @@ namespace Pozitron.Api.Controllers
         }
     }
 
-    public record RegisterRequest(string Username, string Password);
+    public record RegisterRequest(string Username, string Password, string SecurityQuestion, string SecurityAnswer);
     public record LoginRequest(string Username, string Password);
+    public record RecoverRequest(string Username, string SecurityAnswer, string NewPassword);
 }

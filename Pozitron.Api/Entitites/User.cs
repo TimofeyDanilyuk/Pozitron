@@ -12,6 +12,9 @@ namespace Pozitron.Api.Entitites
         public string? EmojiPrefix { get; set; }
         public string? DisplayName { get; set; }
 
+        public string? SecurityQuestion { get; set; }
+        public string? SecurityAnswerHash { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public List<Message> Messages { get; set; } = new();
