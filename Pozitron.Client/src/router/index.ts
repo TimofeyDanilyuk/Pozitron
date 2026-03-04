@@ -12,9 +12,21 @@ const router = createRouter({
     { 
       path: '/chat', 
       name: 'chat',
-      component: () => import('../views/ChatView.vue') 
+      component: () => import('../views/ChatView.vue'),
+      meta: { requiresAuth: true }
     }
   ]
+});
+
+router.beforeEach((to, _from, next) => {
+  const token = localStorage.getItem('token');
+  if (to.meta.requiresAuth && !token) {
+    next({ name: 'auth' });
+  } else if (to.name === 'auth' && token) {
+    next({ name: 'chat' });
+  } else {
+    next();
+  }
 });
 
 export default router;
