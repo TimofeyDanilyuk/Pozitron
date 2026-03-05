@@ -286,7 +286,20 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <p class="text-xs text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
           </div>
           <!-- Стрелка — только на мобилке, намекает что можно нажать -->
-          <span class="text-slate-600 text-xl md:hidden">›</span>
+          <span class="text-slate-600 md:hidden flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                class="w-5 h-5"
+                fill="none">
+                
+              <path d="M9 6L15 12L9 18"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"/>
+                    
+            </svg>
+          </span>
         </div>
       </div>
 
@@ -329,7 +342,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <!-- Кнопка назад — только на мобилке, возвращает к списку -->
           <button @click="goBackToList"
                   class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-800 active:bg-slate-700 transition-all text-purple-400 text-2xl font-bold">
-            ‹
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24">
+            <stop offset="0%" stop-color="#7C5CFF"/><stop offset="100%" stop-color="#37C8FF"/></linearGradient></defs>
+            <path d="M15 6L9 12L15 18" stroke="url(#g)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
 
           <!-- Активный чат — иконка и название -->
@@ -430,7 +446,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         <!-- Строка ввода — скрепка, кнопка эмодзи, textarea, кнопка отправки -->
         <div class="flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 p-1.5 rounded-2xl focus-within:border-purple-500/50 transition-all">
           <!-- Кнопка прикрепления файла (пока не реализовано) -->
-          <button class="p-2 hover:bg-slate-700 rounded-xl transition-colors text-slate-400 shrink-0 self-end mb-0.5">📎</button>
+          <button class="p-2 hover:bg-slate-700 rounded-xl transition-colors text-slate-400 shrink-0 self-end mb-0.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24">
+            <stop offset="0%" stop-color="#7C5CFF"/><stop offset="100%" stop-color="#37C8FF"/></linearGradient></defs>
+            <path d="M21 11.5L12.5 20C10.3 22.2 6.7 22.2 4.5 20C2.3 17.8 2.3 14.2 4.5 12L13 3.5C14.4 2.1 16.6 2.1 18 3.5C19.4 4.9 19.4 7.1 18 8.5L9.5 17C8.8 17.7 7.7 17.7 7 17C6.3 16.3 6.3 15.2 7 14.5L14.5 7"
+            stroke="url(#g)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
 
           <!-- Кнопка открытия эмодзи-пикера -->
           <button @click.stop="isChatEmojiPickerOpen = !isChatEmojiPickerOpen"
@@ -448,9 +470,20 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </textarea>
 
           <!-- Кнопка отправки -->
-          <button @click="sendMessage" :disabled="!chat.activeChat || !messageInput.trim()"
-                  class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2.5 rounded-xl font-black shadow-lg active:scale-95 transition-all text-lg disabled:opacity-40 disabled:cursor-not-allowed shrink-0 self-end">
-            ›
+          <button
+            @click="sendMessage"
+            :disabled="!chat.activeChat || !messageInput.trim()"
+            class="bg-gradient-to-r from-purple-600 to-indigo-600
+                  text-white px-4 py-2.5 rounded-xl
+                  shadow-lg active:scale-95 transition-all
+                  disabled:opacity-40 disabled:cursor-not-allowed
+                  shrink-0 self-end flex items-center justify-center">
+
+            <svg viewBox="0 0 24 24"
+                class="w-6 h-6 fill-white">
+              <path d="M3 12L21 4L14 20L11 13L3 12Z"/>
+            </svg>
+
           </button>
         </div>
       </footer>

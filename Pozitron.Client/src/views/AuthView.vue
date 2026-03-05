@@ -139,7 +139,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
 
       <!-- Логотип -->
       <div class="flex justify-center mb-8 pointer-events-none select-none">
-        <img src="../assets/logo.png" alt="Pozitron Logo" draggable="false"
+        <img src="../assets/login_logo.png" alt="Pozitron Logo" draggable="false"
           class="w-95 h-auto object-contain outline-hidden active:outline-hidden focus:outline-hidden">
       </div>
 
