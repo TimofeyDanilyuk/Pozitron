@@ -454,10 +454,35 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             stroke="url(#g)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
 
-          <!-- Кнопка открытия эмодзи-пикера -->
-          <button @click.stop="isChatEmojiPickerOpen = !isChatEmojiPickerOpen"
-                  :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5 text-lg', isChatEmojiPickerOpen ? 'bg-purple-600/30 text-purple-300' : 'hover:bg-slate-700 text-slate-400']">
-            🙂
+          <!-- Кнопка открытия эмодз-пикера -->
+          <button
+            @click.stop="isChatEmojiPickerOpen = !isChatEmojiPickerOpen"
+            :class="[
+              'p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+              isChatEmojiPickerOpen
+                ? 'bg-purple-600/30 text-purple-300'
+                : 'hover:bg-slate-700 text-slate-400'
+            ]">
+
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none">
+              <circle cx="12" cy="12" r="9"
+                stroke="currentColor"
+                stroke-width="2"/>
+
+              <circle cx="9" cy="10"
+                r="1"
+                fill="currentColor"/>
+
+              <circle cx="15" cy="10"
+                r="1"
+                fill="currentColor"/>
+
+              <path d="M8 14C9 16 15 16 16 14"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"/>
+            </svg>
+
           </button>
 
           <!-- Textarea — растягивается по содержимому до max-h-32, Shift+Enter = перенос строки -->
