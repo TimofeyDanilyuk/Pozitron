@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Pozitron.Api.Data;
 using Pozitron.Api.Entitites;
 using Pozitron.Api.Hubs;
+using BC = BCrypt.Net.BCrypt;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -68,14 +69,28 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
-    
+
     if (!db.Chats.Any(c => c.Type == ChatType.General))
     {
-        db.Chats.Add(new Chat 
-        { 
+        db.Chats.Add(new Chat
+        {
             Id = Guid.Parse("00000000-0000-0000-0000-000000000001"),
-            Type = ChatType.General, 
-            Name = "Общий канал" 
+            Type = ChatType.General,
+            Name = "Общий канал"
+        });
+        db.SaveChanges();
+    }
+
+    if (!db.Users.Any(u => u.Role == UserRole.Admin))
+    {
+        db.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            Username = "admin",
+            PasswordHash = BC.HashPassword("admin"),
+            DisplayName = "admin",
+            Role = UserRole.Admin,
+            CreatedAt = DateTime.UtcNow
         });
         db.SaveChanges();
     }

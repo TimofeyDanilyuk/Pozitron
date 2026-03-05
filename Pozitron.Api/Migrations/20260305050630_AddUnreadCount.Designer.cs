@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Pozitron.Api.Data;
 
@@ -10,9 +11,11 @@ using Pozitron.Api.Data;
 namespace Pozitron.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260305050630_AddUnreadCount")]
+    partial class AddUnreadCount
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.3");
@@ -106,15 +109,9 @@ namespace Pozitron.Api.Migrations
                     b.Property<string>("EmojiPrefix")
                         .HasColumnType("TEXT");
 
-                    b.Property<bool>("IsBanned")
-                        .HasColumnType("INTEGER");
-
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<int>("Role")
-                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SecurityAnswerHash")
                         .HasColumnType("TEXT");

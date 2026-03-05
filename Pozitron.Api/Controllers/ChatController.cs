@@ -38,6 +38,7 @@ public class ChatController : ControllerBase
                 Id = c.Id,
                 Type = c.Type,
                 Name = c.Name,
+                UnreadCount = 0,
                 LastMessage = c.Messages
                     .OrderByDescending(m => m.SentAt)
                     .Select(m => m.Content)
@@ -63,6 +64,7 @@ public class ChatController : ControllerBase
                     .Where(m => m.UserId != userId)
                     .Select(m => m.User!.AvatarUrl)
                     .FirstOrDefault(),
+                UnreadCount = cm.UnreadCount,
                 LastMessage = cm.Chat.Messages
                     .OrderByDescending(m => m.SentAt)
                     .Select(m => m.Content)
@@ -178,6 +180,22 @@ public class ChatController : ControllerBase
 
         return Ok(users);
     }
+
+    [HttpPost("{chatId}/read")]
+    public async Task<IActionResult> MarkAsRead(Guid chatId)
+    {
+        var userId = CurrentUserId;
+        var member = await _context.ChatMembers
+            .FirstOrDefaultAsync(cm => cm.ChatId == chatId && cm.UserId == userId);
+
+        if (member != null)
+        {
+            member.UnreadCount = 0;
+            await _context.SaveChangesAsync();
+        }
+
+        return Ok();
+    }
 }
 
 public record ChatDto
@@ -186,6 +204,7 @@ public record ChatDto
     public ChatType Type { get; set; }
     public string? Name { get; set; }
     public string? AvatarUrl { get; set; }
+    public int UnreadCount { get; set; }
     public string? LastMessage { get; set; }
 }
 

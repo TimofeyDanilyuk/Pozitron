@@ -63,12 +63,15 @@ namespace Pozitron.Api.Controllers
             if (user == null || !BC.Verify(request.Password, user.PasswordHash))
                 return Unauthorized("Неверный логин или пароль");
 
+            if (user.IsBanned)
+                return Unauthorized("Ваш аккаунт заблокирован.");
+
             var token = GenerateJwtToken(user);
 
             return Ok(new
             {
                 Token = token,
-                User = new { user.Id, user.Username, user.EmojiPrefix, user.AvatarUrl }
+                User = new { user.Id, user.Username, user.EmojiPrefix, user.AvatarUrl, user.Role }
             });
         }
 

@@ -254,6 +254,17 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             {{ auth.user?.username?.[0]?.toUpperCase() }}
           </div>
         </div>
+
+        <!-- Кнопка админки — только для админов -->
+        <button v-if="auth.user?.role === 1"
+                @click="router.push('/admin')"
+                class="w-10 h-10 rounded-xl bg-purple-600/20 border border-purple-500/30 flex items-center justify-center hover:bg-purple-600/40 transition-all active:scale-90 shrink-0"
+                title="Админ панель">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
       </div>
 
       <!-- Список чатов — скроллится если не влезает -->
@@ -280,11 +291,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
           </div>
           <div class="min-w-0 flex-1">
-            <!-- Название чата -->
-            <p class="font-bold text-sm truncate">{{ c.name || 'Чат' }}</p>
-            <!-- Превью последнего сообщения -->
-            <p class="text-xs text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+              <p class="font-bold text-sm truncate">{{ c.name || 'Чат' }}</p>
+              <p class="text-xs text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
           </div>
+          <!-- Счётчик -->
+          <span v-if="c.unreadCount > 0"
+                class="shrink-0 min-w-5 h-5 px-1 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+              {{ c.unreadCount > 99 ? '99+' : c.unreadCount }}
+          </span>
           <!-- Стрелка — только на мобилке, намекает что можно нажать -->
           <span class="text-slate-600 md:hidden flex items-center">
             <svg xmlns="http://www.w3.org/2000/svg"

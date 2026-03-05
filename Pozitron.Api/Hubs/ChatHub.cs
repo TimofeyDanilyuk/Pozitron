@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 using Pozitron.Api.Data;
 using Pozitron.Api.Entitites;
 using System.Security.Claims;
+using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
 
 namespace Pozitron.Api.Hubs;
@@ -65,6 +66,15 @@ public class ChatHub : Hub
         };
 
         _context.Messages.Add(message);
+
+        // Инкрементируем счётчик всем участникам кроме отправителя
+        var members = await _context.ChatMembers
+            .Where(cm => cm.ChatId == Guid.Parse(chatId) && cm.UserId != userId)
+            .ToListAsync();
+
+        foreach (var member in members)
+            member.UnreadCount++;
+
         await _context.SaveChangesAsync();
 
         await Clients.Group(chatId).SendAsync("ReceiveMessage", new
@@ -78,5 +88,19 @@ public class ChatHub : Hub
             avatarUrl = user.AvatarUrl,
             emojiPrefix = user.EmojiPrefix
         });
+
+        foreach (var member in members)
+        {
+            var memberIdStr = member.UserId.ToString();
+            if (OnlineUsers.TryGetValue(memberIdStr, out var connId))
+            {
+                await _context.Entry(member).ReloadAsync();
+                await Clients.Client(connId).SendAsync("UnreadUpdated", new
+                {
+                    chatId,
+                    unreadCount = member.UnreadCount
+                });
+            }
+        }
     }
 }

@@ -20,6 +20,7 @@ interface Chat {
   name?: string;
   avatarUrl?: string;
   lastMessage?: string;
+  unreadCount: number;
 }
 
 export const useChatStore = defineStore('chat', {
@@ -71,6 +72,11 @@ export const useChatStore = defineStore('chat', {
       }
       });
 
+      this.connection.on('UnreadUpdated', ({ chatId, unreadCount }: { chatId: string, unreadCount: number }) => {
+          const chat = this.chats.find(c => c.id === chatId);
+          if (chat) chat.unreadCount = unreadCount;
+      });
+
       await this.connection.start();
 
       document.addEventListener('visibilitychange', async () => {
@@ -99,21 +105,18 @@ export const useChatStore = defineStore('chat', {
     },
 
     async openChat(chat: Chat) {
-      if (this.activeChat?.id === chat.id) return;
-
-      // Уходим из предыдущего
-      if (this.activeChat) {
-        await this.connection?.invoke('LeaveChat', this.activeChat.id);
-      }
-
-      this.activeChat = chat;
-      await this.connection?.invoke('JoinChat', chat.id);
-
-      // Загружаем историю если нет
-      if (!this.messages[chat.id]) {
-        const { data } = await api.get(`/chat/${chat.id}/messages`);
-        this.messages[chat.id] = data;
-      }
+        if (this.activeChat?.id === chat.id) return;
+        if (this.activeChat) {
+            await this.connection?.invoke('LeaveChat', this.activeChat.id);
+        }
+        this.activeChat = chat;
+        chat.unreadCount = 0;
+        await this.connection?.invoke('JoinChat', chat.id);
+        await api.post(`/chat/${chat.id}/read`);
+        if (!this.messages[chat.id]) {
+            const { data } = await api.get(`/chat/${chat.id}/messages`);
+            this.messages[chat.id] = data;
+        }
     },
 
     async sendMessage(content: string) {

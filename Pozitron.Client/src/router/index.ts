@@ -20,8 +20,12 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+
   if (to.meta.requiresAuth && !token) {
     next({ name: 'auth' });
+  } else if (to.meta.requiresAdmin && user?.role !== 1) {
+    next({ name: 'chat' });
   } else if (to.name === 'auth' && token) {
     next({ name: 'chat' });
   } else {
