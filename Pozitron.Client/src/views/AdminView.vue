@@ -27,7 +27,10 @@ const loadStats = async () => {
   loading.value = true;
   try {
     const { data } = await api.get('/admin/stats');
+    console.log('stats:', data);
     stats.value = data;
+  } catch (e) {
+    console.error('stats error:', e);
   } finally {
     loading.value = false;
   }

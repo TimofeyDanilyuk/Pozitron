@@ -4,17 +4,9 @@ import AuthView from '../views/AuthView.vue';
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { 
-      path: '/', 
-      name: 'auth',
-      component: AuthView 
-    },
-    { 
-      path: '/chat', 
-      name: 'chat',
-      component: () => import('../views/ChatView.vue'),
-      meta: { requiresAuth: true }
-    }
+    { path: '/', name: 'auth', component: AuthView },
+    { path: '/chat', name: 'chat', component: () => import('../views/ChatView.vue'), meta: { requiresAuth: true } },
+    { path: '/admin', name: 'admin', component: () => import('../views/AdminView.vue'), meta: { requiresAuth: true, requiresAdmin: true } }
   ]
 });
 
