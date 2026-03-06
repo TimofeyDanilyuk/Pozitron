@@ -10,7 +10,8 @@ using BC = BCrypt.Net.BCrypt;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite("Data Source=pozitron.db"));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")
+        ?? Environment.GetEnvironmentVariable("DATABASE_URL")));
 
 builder.Services.AddSignalR();
 
@@ -86,9 +87,9 @@ using (var scope = app.Services.CreateScope())
         db.Users.Add(new User
         {
             Id = Guid.NewGuid(),
-            Username = "admin",
-            PasswordHash = BC.HashPassword("admin"),
-            DisplayName = "admin",
+            Username = "Administrator",
+            PasswordHash = BC.HashPassword("oJmFSvg1BH91"),
+            DisplayName = "Administrator",
             Role = UserRole.Admin,
             CreatedAt = DateTime.UtcNow
         });
