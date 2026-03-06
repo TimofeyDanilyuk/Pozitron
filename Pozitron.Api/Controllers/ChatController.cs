@@ -89,6 +89,14 @@ public class ChatController : ControllerBase
             {
                 Id = m.Id,
                 Content = m.Content,
+                AttachmentUrl = m.AttachmentUrl,
+                Type = m.Type.ToString(),
+                PackId = m.Type == MessageType.Sticker
+                    ? _context.Stickers
+                        .Where(s => s.Id.ToString() == m.Content)
+                        .Select(s => (Guid?)s.PackId)
+                        .FirstOrDefault()
+                    : null,
                 SentAt = m.SentAt,
                 UserId = m.UserId,
                 Username = m.User!.Username,
@@ -212,6 +220,9 @@ public record MessageDto
 {
     public Guid Id { get; set; }
     public string? Content { get; set; }
+    public string? AttachmentUrl { get; set; }
+    public string? Type { get; set; }
+    public Guid? PackId { get; set; }
     public DateTime SentAt { get; set; }
     public Guid UserId { get; set; }
     public string? Username { get; set; }

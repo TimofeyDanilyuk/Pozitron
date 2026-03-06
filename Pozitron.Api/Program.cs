@@ -82,23 +82,6 @@ using (var scope = app.Services.CreateScope())
     // Миграция БД
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-    db.Database.ExecuteSqlRaw(@"
-        CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
-            ""MigrationId"" character varying(150) NOT NULL,
-            ""ProductVersion"" character varying(32) NOT NULL,
-            CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY (""MigrationId"")
-        );
-    ");
-
-    db.Database.ExecuteSqlRaw(@"
-        INSERT INTO ""__EFMigrationsHistory"" (""MigrationId"", ""ProductVersion"")
-        SELECT '20260306010226_InitPostgres', '10.0.0'
-        WHERE NOT EXISTS (
-            SELECT 1 FROM ""__EFMigrationsHistory"" 
-            WHERE ""MigrationId"" = '20260306010226_InitPostgres'
-        );
-    ");
-
     db.Database.Migrate();
 
     if (!db.Chats.Any(c => c.Type == ChatType.General))
