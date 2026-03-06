@@ -586,7 +586,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                       </svg>
                       <div v-else class="w-3 h-3 border border-purple-400 border-t-transparent rounded-full animate-spin"></div>
-                      <input type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" @change="uploadSticker">
+                      <input type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4" @change="uploadSticker">
                     </label>
                   </div>
                   <div class="p-2 grid grid-cols-4 gap-1">
