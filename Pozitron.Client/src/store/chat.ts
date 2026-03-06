@@ -8,7 +8,7 @@ export interface Message {
   chatId: string;
   content: string;
   attachmentUrl?: string;
-  type?: string; // 'Text' | 'Sticker'
+  type?: string;
   packId?: string;
   sentAt: string;
   userId: string;
@@ -18,13 +18,14 @@ export interface Message {
   isRead?: boolean;
 }
 
-interface Chat {
+export interface Chat {
   id: string;
   type: number;
   name?: string;
   avatarUrl?: string;
   lastMessage?: string;
   unreadCount: number;
+  isContact?: boolean;
 }
 
 export interface Sticker {
@@ -48,9 +49,15 @@ export const useChatStore = defineStore('chat', {
     onlineUsers: [] as string[],
     connection: null as signalR.HubConnection | null,
     users: [] as any[],
+    allUsers: [] as any[],
     stickerPacks: [] as StickerPack[],
     stickerPacksLoaded: false,
   }),
+
+  getters: {
+    contactChats: (state) => state.chats.filter(c => c.type === 1 && c.isContact),
+    otherChats: (state) => state.chats.filter(c => !c.isContact),
+  },
 
   actions: {
     async connect() {
@@ -84,15 +91,28 @@ export const useChatStore = defineStore('chat', {
         this.onlineUsers = this.onlineUsers.filter(id => id !== userId);
       });
 
-      this.connection.on('NewDmChat', (chat: Chat) => {
-        if (!this.chats.find(c => c.id === chat.id)) {
-          this.chats.push(chat);
+      this.connection.on('NewDmChat', (incomingChat: Chat) => {
+        const existing = this.chats.find(c => c.id === incomingChat.id);
+        if (!existing) {
+          this.chats.push(incomingChat);
+        } else if (incomingChat.isContact) {
+          existing.isContact = true;
         }
       });
 
       this.connection.on('UnreadUpdated', ({ chatId, unreadCount }: { chatId: string, unreadCount: number }) => {
         const chat = this.chats.find(c => c.id === chatId);
         if (chat) chat.unreadCount = unreadCount;
+      });
+
+      this.connection.on('MessagesRead', ({ chatId }: { chatId: string }) => {
+        const msgs = this.messages[chatId];
+        if (msgs) {
+          const auth = useAuthStore();
+          msgs.forEach(m => {
+            if (m.userId === auth.user?.id) m.isRead = true;
+          });
+        }
       });
 
       this.connection.onreconnected(async () => {
@@ -159,6 +179,23 @@ export const useChatStore = defineStore('chat', {
       await this.connection?.invoke('SendSticker', this.activeChat.id, stickerId);
     },
 
+    // ===== КОНТАКТЫ =====
+    async loadAllUsers() {
+      const { data } = await api.get('/chat/users', { params: { search: '' } });
+      this.allUsers = data;
+    },
+
+    async addContact(contactId: string) {
+      await api.post(`/user/contacts/${contactId}`);
+      await this.loadChats();
+    },
+
+    async removeContact(contactId: string) {
+      await api.delete(`/user/contacts/${contactId}`);
+      await this.loadChats();
+    },
+
+    // ===== СТИКЕРЫ =====
     async loadMyPacks() {
       const { data } = await api.get('/sticker/my');
       this.stickerPacks = data;

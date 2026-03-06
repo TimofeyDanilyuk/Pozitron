@@ -30,17 +30,13 @@ const isCreatePackOpen = ref(false);
 const newPackName = ref('');
 const creatingPack = ref(false);
 const uploadingSticker = ref(false);
-
-// Модалка пака при клике на стикер в чате
 const stickerPackModal = ref<null | { id: string, name: string, coverUrl?: string, stickers: any[], isAdded: boolean, createdBy: string }>(null);
 const stickerPackModalLoading = ref(false);
 
-// Активный пак в панели стикеров
 const activePack = computed(() =>
   chat.stickerPacks.find(p => p.id === activeStickerPackId.value) || chat.stickerPacks[0] || null
 );
 
-// Открыть/закрыть панель стикеров
 const toggleStickerPicker = async () => {
   isStickerPickerOpen.value = !isStickerPickerOpen.value;
   isChatEmojiPickerOpen.value = false;
@@ -52,19 +48,16 @@ const toggleStickerPicker = async () => {
   }
 };
 
-// Выбрать пак в панели
 const selectPack = (packId: string) => {
   activeStickerPackId.value = packId;
   isCreatePackOpen.value = false;
 };
 
-// Отправить стикер
 const sendSticker = async (stickerId: string) => {
   await chat.sendSticker(stickerId);
   isStickerPickerOpen.value = false;
 };
 
-// Создать новый пак
 const createPack = async () => {
   if (!newPackName.value.trim()) return;
   creatingPack.value = true;
@@ -78,7 +71,6 @@ const createPack = async () => {
   }
 };
 
-// Загрузить стикер в активный пак
 const uploadSticker = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (!target.files || !target.files[0] || !activePack.value) return;
@@ -91,7 +83,6 @@ const uploadSticker = async (event: Event) => {
   }
 };
 
-// Клик на стикер в чате — открыть информацию о паке
 const onStickerClick = async (packId: string) => {
   stickerPackModalLoading.value = true;
   stickerPackModal.value = null;
@@ -103,7 +94,6 @@ const onStickerClick = async (packId: string) => {
   }
 };
 
-// Добавить/убрать пак из модалки
 const togglePackFromModal = async () => {
   if (!stickerPackModal.value) return;
   if (stickerPackModal.value.isAdded) {
@@ -115,8 +105,50 @@ const togglePackFromModal = async () => {
   }
 };
 
-// ===== КОНЕЦ СТИКЕРОВ =====
+// ===== КОНТАКТЫ =====
+const isAddContactsOpen = ref(false);
+const contactSearch = ref('');
+const selectedUserIds = ref<Set<string>>(new Set());
+const addingContacts = ref(false);
 
+const filteredAllUsers = computed(() => {
+  if (!contactSearch.value.trim()) return chat.allUsers;
+  return chat.allUsers.filter(u =>
+    u.username.toLowerCase().includes(contactSearch.value.toLowerCase())
+  );
+});
+
+const openAddContacts = async () => {
+  isAddContactsOpen.value = true;
+  selectedUserIds.value = new Set();
+  contactSearch.value = '';
+  await chat.loadAllUsers();
+};
+
+const toggleSelectUser = (userId: string) => {
+  if (selectedUserIds.value.has(userId)) {
+    selectedUserIds.value.delete(userId);
+  } else {
+    selectedUserIds.value.add(userId);
+  }
+  // Триггер реактивности
+  selectedUserIds.value = new Set(selectedUserIds.value);
+};
+
+const confirmAddContacts = async () => {
+  if (selectedUserIds.value.size === 0) return;
+  addingContacts.value = true;
+  try {
+    for (const userId of selectedUserIds.value) {
+      await chat.addContact(userId);
+    }
+    isAddContactsOpen.value = false;
+  } finally {
+    addingContacts.value = false;
+  }
+};
+
+// ===== ЭМОДЗИ =====
 const emojiCategories = [
   { label: '😀 Смайлы', emojis: ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','😗','😙','😚','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😕','🙃','🤑','😲','☹️','🙁','😖','😞','😟','😤','😢','😭','😦','😧','😨','😩','🤯','😬','😰','😱','🥵','🥶','😳','🤪','😵','🥴','😠','😡','🤬','😷','🤒','🤕','🤧','🥱'] },
   { label: '👋 Жесты', emojis: ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🤟','🤘','🤙','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','👐','🤲','🤝','🙏','✍️','💅','🤳','💪','🦾'] },
@@ -281,6 +313,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       'md:relative md:w-80 md:flex',
       mobileView === 'list' ? 'absolute inset-0 z-10 flex w-full' : 'hidden md:flex'
     ]">
+      <!-- Шапка -->
       <div class="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/30 shrink-0">
         <div class="flex items-center gap-3 overflow-hidden">
           <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shrink-0 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
@@ -307,37 +340,94 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </button>
       </div>
 
+      <!-- Список чатов -->
       <div class="flex-1 overflow-y-auto">
         <div v-if="chat.chats.length === 0" class="flex flex-col items-center justify-center h-full opacity-20 px-10 text-center">
           <span class="text-4xl mb-2">💬</span>
           <p class="text-xs uppercase tracking-widest font-bold">Список пуст</p>
         </div>
-        <div v-for="c in chat.chats" :key="c.id" @click="openChat(c)"
-             :class="['flex items-center gap-3 px-4 py-3 cursor-pointer transition-all active:bg-slate-700/50 hover:bg-slate-800/50',
-               chat.activeChat?.id === c.id ? 'bg-purple-600/20 border-r-2 border-purple-500' : '']">
-          <div class="relative shrink-0">
-            <img v-if="c.avatarUrl && c.type === 1" :src="c.avatarUrl" class="w-12 h-12 rounded-xl object-cover">
-            <div v-else class="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center text-xl">
-              {{ c.type === 0 ? '🌐' : c.name?.[0]?.toUpperCase() }}
+
+        <!-- Раздел КОНТАКТЫ -->
+        <template v-if="chat.contactChats.length > 0">
+          <div class="px-4 pt-3 pb-1 flex items-center gap-2">
+            <span class="text-[10px] font-black uppercase tracking-widest text-purple-400">Контакты</span>
+            <div class="flex-1 h-px bg-purple-500/20"></div>
+          </div>
+          <div v-for="c in chat.contactChats" :key="c.id" @click="openChat(c)"
+               :class="['flex items-center gap-3 px-4 py-3 cursor-pointer transition-all active:bg-slate-700/50 hover:bg-slate-800/50',
+                 chat.activeChat?.id === c.id ? 'bg-purple-600/20 border-r-2 border-purple-500' : '']">
+            <div class="relative shrink-0">
+              <img v-if="c.avatarUrl" :src="c.avatarUrl" class="w-12 h-12 rounded-xl object-cover">
+              <div v-else class="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center text-xl">
+                {{ c.name?.[0]?.toUpperCase() }}
+              </div>
             </div>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <!-- Иконка контакта -->
+                <svg viewBox="0 0 16 16" class="w-3 h-3 text-purple-400 shrink-0 fill-current">
+                  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1a5 5 0 0 0-5 5h10a5 5 0 0 0-5-5z"/>
+                </svg>
+                <p class="font-bold text-sm truncate text-purple-300">{{ c.name || 'Контакт' }}</p>
+              </div>
+              <p class="text-xs text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+            </div>
+            <span v-if="c.unreadCount > 0"
+                  class="shrink-0 min-w-5 h-5 px-1 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+              {{ c.unreadCount > 99 ? '99+' : c.unreadCount }}
+            </span>
+            <span class="text-slate-600 md:hidden flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="none">
+                <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
           </div>
-          <div class="min-w-0 flex-1">
-            <p class="font-bold text-sm truncate">{{ c.name || 'Чат' }}</p>
-            <p class="text-xs text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+        </template>
+
+        <!-- Раздел ЧАТЫ -->
+        <template v-if="chat.otherChats.length > 0">
+          <div class="px-4 pt-3 pb-1 flex items-center gap-2">
+            <span class="text-[10px] font-black uppercase tracking-widest text-slate-500">Чаты</span>
+            <div class="flex-1 h-px bg-slate-700/50"></div>
           </div>
-          <span v-if="c.unreadCount > 0"
-                class="shrink-0 min-w-5 h-5 px-1 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-            {{ c.unreadCount > 99 ? '99+' : c.unreadCount }}
-          </span>
-          <span class="text-slate-600 md:hidden flex items-center">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="none">
-              <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </span>
-        </div>
+          <div v-for="c in chat.otherChats" :key="c.id" @click="openChat(c)"
+               :class="['flex items-center gap-3 px-4 py-3 cursor-pointer transition-all active:bg-slate-700/50 hover:bg-slate-800/50',
+                 chat.activeChat?.id === c.id ? 'bg-purple-600/20 border-r-2 border-purple-500' : '']">
+            <div class="relative shrink-0">
+              <img v-if="c.avatarUrl && c.type === 1" :src="c.avatarUrl" class="w-12 h-12 rounded-xl object-cover">
+              <div v-else class="w-12 h-12 rounded-xl bg-slate-700 flex items-center justify-center text-xl">
+                {{ c.type === 0 ? '🌐' : c.name?.[0]?.toUpperCase() }}
+              </div>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="font-bold text-sm truncate">{{ c.name || 'Чат' }}</p>
+              <p class="text-xs text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+            </div>
+            <span v-if="c.unreadCount > 0"
+                  class="shrink-0 min-w-5 h-5 px-1 bg-purple-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+              {{ c.unreadCount > 99 ? '99+' : c.unreadCount }}
+            </span>
+            <span class="text-slate-600 md:hidden flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="none">
+                <path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+          </div>
+        </template>
       </div>
 
-      <div class="p-4 border-t border-slate-800 shrink-0">
+      <!-- Футер сайдбара: кнопка контактов + поиск -->
+      <div class="p-4 border-t border-slate-800 shrink-0 space-y-2">
+        <!-- Кнопка добавить контакты -->
+        <button @click="openAddContacts"
+                class="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600/10 border border-purple-500/20 hover:bg-purple-600/20 transition-all active:scale-95 text-purple-400 text-sm font-bold">
+          <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current shrink-0">
+            <path d="M19 11h-6V5a1 1 0 0 0-2 0v6H5a1 1 0 0 0 0 2h6v6a1 1 0 0 0 2 0v-6h6a1 1 0 0 0 0-2z"/>
+          </svg>
+          Добавить контакты...
+        </button>
+
+        <!-- Поиск пользователей для DM -->
         <div class="relative">
           <input v-model="searchQuery" @input="onSearch" type="text" placeholder="Найти пользователя..."
                  class="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-purple-500/50 transition-all select-text">
@@ -360,8 +450,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
       <header class="px-4 py-3 border-b border-slate-800 flex items-center justify-between bg-slate-900/80 backdrop-blur-md z-10 shrink-0">
         <div class="flex items-center gap-2">
-          <button @click="goBackToList"
-                  class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-800 active:bg-slate-700 transition-all">
+          <button @click="goBackToList" class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-800 active:bg-slate-700 transition-all">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
               <defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24">
               <stop offset="0%" stop-color="#7C5CFF"/><stop offset="100%" stop-color="#37C8FF"/></linearGradient></defs>
@@ -372,7 +461,15 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <div class="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center text-base shrink-0">
               {{ chat.activeChat.type === 0 ? '🌐' : chat.activeChat.name?.[0]?.toUpperCase() }}
             </div>
-            <p class="font-bold text-sm">{{ chat.activeChat.name || 'Чат' }}</p>
+            <div class="flex items-center gap-1.5">
+              <p class="font-bold text-sm" :class="chat.activeChat.isContact ? 'text-purple-300' : ''">
+                {{ chat.activeChat.name || 'Чат' }}
+              </p>
+              <!-- Иконка контакта в шапке -->
+              <svg v-if="chat.activeChat.isContact" viewBox="0 0 16 16" class="w-3.5 h-3.5 text-purple-400 fill-current">
+                <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1a5 5 0 0 0-5 5h10a5 5 0 0 0-5-5z"/>
+              </svg>
+            </div>
           </div>
           <div v-else class="flex items-center gap-2">
             <div class="w-2 h-2 rounded-full bg-slate-600"></div>
@@ -401,7 +498,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
           <div v-for="msg in currentMessages" :key="msg.id"
                :class="['flex gap-2 items-end', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
-
             <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
             <div v-else class="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mb-5">
               {{ msg.username?.[0]?.toUpperCase() }}
@@ -412,15 +508,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
               <!-- Стикер -->
               <div v-if="msg.type === 'Sticker' && msg.attachmentUrl"
-                  @click="msg.packId && onStickerClick(msg.packId)"
-                  class="cursor-pointer active:scale-95 transition-transform relative">
-                <img :src="msg.attachmentUrl"
-                    class="w-32 h-32 object-contain rounded-2xl"
-                    draggable="false"
-                    oncontextmenu="return false">
-                <!-- Галочки под стикером -->
-                <span v-if="msg.userId === auth.user?.id"
-                      class="absolute bottom-1 right-1 opacity-70">
+                   @click="msg.packId && onStickerClick(msg.packId)"
+                   class="cursor-pointer active:scale-95 transition-transform relative">
+                <img :src="msg.attachmentUrl" class="w-32 h-32 object-contain rounded-2xl" draggable="false" oncontextmenu="return false">
+                <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
                   <svg v-if="!msg.isRead" viewBox="0 0 16 16" class="w-3.5 h-3.5 fill-white drop-shadow">
                     <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
                   </svg>
@@ -432,21 +523,17 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               </div>
 
               <!-- Обычное сообщение -->
-             <div v-else :class="[
-                'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed relative',
+              <div v-else :class="[
+                'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed',
                 msg.userId === auth.user?.id
                   ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm'
                   : 'bg-slate-800 text-slate-100 rounded-bl-sm'
               ]">
                 {{ msg.content }}
-                <!-- Галочки — только для своих сообщений -->
-                <span v-if="msg.userId === auth.user?.id"
-                      class="inline-flex items-center ml-2 opacity-70 translate-y-0.5">
-                  <!-- Одна галочка — не прочитано -->
+                <span v-if="msg.userId === auth.user?.id" class="inline-flex items-center ml-2 opacity-70 translate-y-0.5">
                   <svg v-if="!msg.isRead" viewBox="0 0 16 16" class="w-3.5 h-3.5 fill-white/80">
                     <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
                   </svg>
-                  <!-- Две галочки — прочитано -->
                   <svg v-else viewBox="0 0 20 16" class="w-4 h-3.5 fill-white">
                     <path d="M15.5 3.5L8 11L4.5 7.5L3.5 8.5L8 13L16.5 4.5L15.5 3.5Z"/>
                     <path d="M11.5 3.5L9 6l-1-1-1 1 2 2 3.5-3.5L11.5 3.5Z" opacity="0.7"/>
@@ -460,28 +547,18 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         <div ref="messagesEnd"></div>
       </div>
 
-      <!-- Футер с полем ввода -->
+      <!-- Футер -->
       <footer class="p-3 bg-slate-950/80 backdrop-blur-md border-t border-slate-800 z-10 shrink-0">
-
-        <!-- Панель стикеров -->
         <Transition name="picker">
           <div v-if="isStickerPickerOpen" class="mb-2 bg-slate-950 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl" @click.stop>
             <div class="flex h-64">
-
-              <!-- Левая колонка — список паков + кнопка создать -->
               <div class="w-14 bg-slate-900 border-r border-slate-800 flex flex-col items-center py-2 gap-2 overflow-y-auto shrink-0">
-                <!-- Иконки паков -->
-                <button v-for="pack in chat.stickerPacks" :key="pack.id"
-                        @click="selectPack(pack.id)"
+                <button v-for="pack in chat.stickerPacks" :key="pack.id" @click="selectPack(pack.id)"
                         :class="['w-10 h-10 rounded-xl overflow-hidden border-2 transition-all active:scale-90',
                           activePack?.id === pack.id ? 'border-purple-500' : 'border-transparent']">
                   <img v-if="pack.coverUrl" :src="pack.coverUrl" class="w-full h-full object-cover">
-                  <div v-else class="w-full h-full bg-slate-700 flex items-center justify-center text-xs font-bold">
-                    {{ pack.name[0] }}
-                  </div>
+                  <div v-else class="w-full h-full bg-slate-700 flex items-center justify-center text-xs font-bold">{{ pack.name[0] }}</div>
                 </button>
-
-                <!-- Кнопка создать пак -->
                 <button @click="isCreatePackOpen = !isCreatePackOpen; activeStickerPackId = null"
                         :class="['w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90',
                           isCreatePackOpen ? 'border-purple-500 bg-purple-600/20 text-purple-400' : 'border-slate-700 text-slate-500 hover:border-slate-600']">
@@ -490,11 +567,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                   </svg>
                 </button>
               </div>
-
-              <!-- Правая часть -->
               <div class="flex-1 overflow-y-auto">
-
-                <!-- Создание нового пака -->
                 <div v-if="isCreatePackOpen" class="p-4 space-y-3">
                   <p class="text-xs font-bold text-slate-400 uppercase">Новый пак стикеров</p>
                   <input v-model="newPackName" type="text" placeholder="Название пака..."
@@ -504,10 +577,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                     {{ creatingPack ? 'Создаём...' : 'Создать' }}
                   </button>
                 </div>
-
-                <!-- Пак стикеров -->
                 <div v-else-if="activePack">
-                  <!-- Заголовок пака + кнопка добавить стикер если создатель -->
                   <div class="flex items-center justify-between px-3 pt-3 pb-2 border-b border-slate-800">
                     <p class="text-xs font-bold text-slate-400 truncate">{{ activePack.name }}</p>
                     <label v-if="activePack.createdByMe"
@@ -519,23 +589,17 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                       <input type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp" @change="uploadSticker">
                     </label>
                   </div>
-
-                  <!-- Сетка стикеров -->
                   <div class="p-2 grid grid-cols-4 gap-1">
-                    <button v-for="sticker in activePack.stickers" :key="sticker.id"
-                            @click="sendSticker(sticker.id)"
+                    <button v-for="sticker in activePack.stickers" :key="sticker.id" @click="sendSticker(sticker.id)"
                             class="w-full aspect-square rounded-xl overflow-hidden hover:bg-slate-700 active:scale-90 transition-all p-1">
                       <img :src="sticker.url" class="w-full h-full object-contain" draggable="false" oncontextmenu="return false">
                     </button>
-                    <!-- Пустое состояние -->
                     <div v-if="activePack.stickers.length === 0" class="col-span-4 flex flex-col items-center justify-center py-8 opacity-30">
                       <p class="text-xs">Нет стикеров</p>
                       <p v-if="activePack.createdByMe" class="text-xs mt-1">Нажми + чтобы добавить</p>
                     </div>
                   </div>
                 </div>
-
-                <!-- Нет паков -->
                 <div v-else-if="!isCreatePackOpen" class="flex flex-col items-center justify-center h-full opacity-30 p-4 text-center">
                   <p class="text-2xl mb-2">🎭</p>
                   <p class="text-xs">Нет стикеров. Нажми + чтобы создать пак</p>
@@ -545,7 +609,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </div>
         </Transition>
 
-        <!-- Пикер эмодзи -->
         <Transition name="picker">
           <div v-if="isChatEmojiPickerOpen" class="mb-2 bg-slate-950 border border-slate-700 rounded-2xl overflow-hidden shadow-2xl" @click.stop>
             <div class="p-2 border-b border-slate-800">
@@ -566,9 +629,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </div>
         </Transition>
 
-        <!-- Строка ввода -->
         <div class="flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 p-1.5 rounded-2xl focus-within:border-purple-500/50 transition-all">
-          <!-- Прикрепить файл -->
           <button class="p-2 hover:bg-slate-700 rounded-xl transition-colors text-slate-400 shrink-0 self-end mb-0.5">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
               <defs><linearGradient id="ga" x1="0" y1="0" x2="24" y2="24">
@@ -577,8 +638,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               stroke="url(#ga)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-
-          <!-- Кнопка стикеров -->
           <button @click.stop="toggleStickerPicker" :disabled="!chat.activeChat"
                   :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
                     isStickerPickerOpen ? 'bg-purple-600/30 text-purple-300' : 'hover:bg-slate-700 text-slate-400',
@@ -590,8 +649,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <path d="M7 14.5C8.5 17 15.5 17 17 14.5" stroke-width="2" stroke-linecap="round"/>
             </svg>
           </button>
-
-          <!-- Кнопка эмодзи -->
           <button @click.stop="isChatEmojiPickerOpen = !isChatEmojiPickerOpen; isStickerPickerOpen = false"
                   :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
                     isChatEmojiPickerOpen ? 'bg-purple-600/30 text-purple-300' : 'hover:bg-slate-700 text-slate-400']">
@@ -602,54 +659,103 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <path d="M8 14C9 16 15 16 16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
           </button>
-
-          <!-- Textarea -->
           <textarea v-model="messageInput" @keydown="handleKeydown"
                     :placeholder="chat.activeChat ? 'Напиши что-нибудь...' : 'Выберите чат...'"
-                    :disabled="!chat.activeChat"
-                    rows="1"
+                    :disabled="!chat.activeChat" rows="1"
                     class="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm placeholder:text-slate-600 select-text disabled:opacity-40 resize-none max-h-32 overflow-y-auto"
-                    style="field-sizing: content;">
-          </textarea>
-
-          <!-- Отправить -->
+                    style="field-sizing: content;"></textarea>
           <button @click="sendMessage" :disabled="!chat.activeChat || !messageInput.trim()"
                   class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 self-end">
-            <svg viewBox="0 0 24 24" class="w-6 h-6 fill-white">
-              <path d="M3 12L21 4L14 20L11 13L3 12Z"/>
-            </svg>
+            <svg viewBox="0 0 24 24" class="w-6 h-6 fill-white"><path d="M3 12L21 4L14 20L11 13L3 12Z"/></svg>
           </button>
         </div>
       </footer>
     </main>
 
-    <!-- ===== МОДАЛКА ПАКА ПРИ КЛИКЕ НА СТИКЕР ===== -->
+    <!-- ===== МОДАЛКА ДОБАВЛЕНИЯ КОНТАКТОВ ===== -->
+    <Transition name="fade">
+      <div v-if="isAddContactsOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
+        <div @click="isAddContactsOpen = false" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
+        <div class="relative bg-slate-900 border border-white/10 w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
+          <!-- Шапка -->
+          <div class="p-5 border-b border-slate-800">
+            <p class="font-black text-lg">Добавить контакты</p>
+            <p class="text-xs text-slate-500 mt-0.5">Выбери пользователей</p>
+          </div>
+
+          <!-- Поиск -->
+          <div class="px-4 pt-3">
+            <input v-model="contactSearch" type="text" placeholder="Поиск..."
+                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-purple-500 select-text">
+          </div>
+
+          <!-- Список пользователей -->
+          <div class="max-h-64 overflow-y-auto p-2 mt-2">
+            <div v-if="chat.allUsers.length === 0" class="flex items-center justify-center py-8 opacity-30">
+              <p class="text-sm">Загрузка...</p>
+            </div>
+            <div v-for="user in filteredAllUsers" :key="user.id"
+                 @click="toggleSelectUser(user.id)"
+                 class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all hover:bg-slate-800 active:bg-slate-700">
+              <!-- Аватар -->
+              <img v-if="user.avatarUrl" :src="user.avatarUrl" class="w-10 h-10 rounded-xl object-cover shrink-0">
+              <div v-else class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-sm font-bold shrink-0">
+                {{ user.username?.[0]?.toUpperCase() }}
+              </div>
+              <!-- Имя -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-bold truncate">{{ user.emojiPrefix || '' }} {{ user.username }}</p>
+                <div class="flex items-center gap-1 mt-0.5">
+                  <div :class="['w-1.5 h-1.5 rounded-full', isOnline(user.id) ? 'bg-green-500' : 'bg-slate-600']"></div>
+                  <p class="text-xs text-slate-500">{{ isOnline(user.id) ? 'онлайн' : 'оффлайн' }}</p>
+                </div>
+              </div>
+              <!-- Чекбокс -->
+              <div :class="['w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0',
+                selectedUserIds.has(user.id)
+                  ? 'bg-purple-600 border-purple-600'
+                  : 'border-slate-600']">
+                <svg v-if="selectedUserIds.has(user.id)" viewBox="0 0 16 16" class="w-3.5 h-3.5 fill-white">
+                  <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <!-- Кнопки -->
+          <div class="p-4 border-t border-slate-800 flex gap-3">
+            <button @click="isAddContactsOpen = false"
+                    class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-sm transition-all active:scale-95">
+              Отмена
+            </button>
+            <button @click="confirmAddContacts"
+                    :disabled="selectedUserIds.size === 0 || addingContacts"
+                    class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 rounded-xl text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">
+              {{ addingContacts ? 'Добавляем...' : `Добавить${selectedUserIds.size > 0 ? ` (${selectedUserIds.size})` : ''}` }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ===== МОДАЛКА ПАКА ===== -->
     <Transition name="fade">
       <div v-if="stickerPackModal || stickerPackModalLoading" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
         <div @click="stickerPackModal = null; stickerPackModalLoading = false" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
         <div class="relative bg-slate-900 border border-white/10 w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
-
-          <!-- Загрузка -->
           <div v-if="stickerPackModalLoading" class="flex items-center justify-center py-16">
             <div class="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
-
           <div v-else-if="stickerPackModal">
-            <!-- Заголовок -->
             <div class="p-5 border-b border-slate-800">
               <p class="font-black text-lg">{{ stickerPackModal.name }}</p>
               <p class="text-xs text-slate-500 mt-0.5">Автор: {{ stickerPackModal.createdBy }}</p>
             </div>
-
-            <!-- Сетка стикеров пака -->
             <div class="p-3 grid grid-cols-4 gap-2 max-h-56 overflow-y-auto">
-              <div v-for="s in stickerPackModal.stickers" :key="s.id"
-                   class="aspect-square rounded-xl overflow-hidden bg-slate-800 p-1">
+              <div v-for="s in stickerPackModal.stickers" :key="s.id" class="aspect-square rounded-xl overflow-hidden bg-slate-800 p-1">
                 <img :src="s.url" class="w-full h-full object-contain" draggable="false" oncontextmenu="return false">
               </div>
             </div>
-
-            <!-- Кнопка добавить/убрать -->
             <div class="p-4 border-t border-slate-800">
               <button @click="togglePackFromModal"
                       :class="['w-full font-bold py-3 rounded-xl text-sm active:scale-95 transition-all',
