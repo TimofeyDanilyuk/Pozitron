@@ -6,9 +6,11 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Pozitron.Api.Data;
 using Pozitron.Api.Entitites;
+using Pozitron.Api.Hubs;
 
 namespace Pozitron.Api.Controllers
 {
@@ -19,10 +21,12 @@ namespace Pozitron.Api.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _environment;
+        private readonly IHubContext<ChatHub> _hub;
 
-        public UserController(AppDbContext context, IWebHostEnvironment environment)
+        public UserController(AppDbContext context, IWebHostEnvironment environment, IHubContext<ChatHub> hub)
         {
             _context = context;
+            _hub = hub;
             _environment = environment;
         }
 
@@ -50,19 +54,61 @@ namespace Pozitron.Api.Controllers
         public async Task<IActionResult> AddContact(Guid contactId)
         {
             var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
-            
             if (userId == contactId) return BadRequest("Нельзя добавить себя");
-            
+
             var exists = await _context.UserContacts
                 .AnyAsync(uc => uc.UserId == userId && uc.ContactId == contactId);
             if (exists) return BadRequest("Уже в контактах");
 
-            _context.UserContacts.Add(new UserContact {
-                UserId = userId,
-                ContactId = contactId
-            });
+            _context.UserContacts.Add(new UserContact { UserId = userId, ContactId = contactId });
+
+            // Создаём DM чат если нет
+            var myChats = await _context.ChatMembers
+                .Where(cm => cm.UserId == userId)
+                .Select(cm => cm.ChatId)
+                .ToListAsync();
+
+            var dmExists = await _context.ChatMembers
+                .AnyAsync(cm => cm.UserId == contactId
+                    && myChats.Contains(cm.ChatId)
+                    && cm.Chat!.Type == ChatType.Direct);
+
+            Guid chatId;
+            if (!dmExists)
+            {
+                var newChat = new Chat { Id = Guid.NewGuid(), Type = ChatType.Direct };
+                newChat.Members.Add(new ChatMember { ChatId = newChat.Id, UserId = userId });
+                newChat.Members.Add(new ChatMember { ChatId = newChat.Id, UserId = contactId });
+                _context.Chats.Add(newChat);
+                chatId = newChat.Id;
+            }
+            else
+            {
+                chatId = await _context.ChatMembers
+                    .Where(cm => cm.UserId == contactId && myChats.Contains(cm.ChatId))
+                    .Select(cm => cm.ChatId)
+                    .FirstAsync();
+            }
+
             await _context.SaveChangesAsync();
-            return Ok();
+
+            var currentUser = await _context.Users.FindAsync(userId);
+            var contact = await _context.Users.FindAsync(contactId);
+
+            // Уведомляем себя о новом чате
+            if (ChatHub.OnlineUsers.TryGetValue(userId.ToString(), out var myConn))
+            {
+                await _hub.Clients.Client(myConn).SendAsync("NewDmChat", new {
+                    id = chatId,
+                    type = ChatType.Direct,
+                    name = contact?.Username,
+                    avatarUrl = contact?.AvatarUrl,
+                    isContact = true,
+                    lastMessage = (string?)null
+                });
+            }
+
+            return Ok(new { chatId });
         }
 
         // Удалить контакт

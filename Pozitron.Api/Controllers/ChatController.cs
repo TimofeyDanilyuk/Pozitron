@@ -68,7 +68,12 @@ public class ChatController : ControllerBase
                 LastMessage = cm.Chat.Messages
                     .OrderByDescending(m => m.SentAt)
                     .Select(m => m.Content)
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                IsContact = _context.UserContacts
+                    .Any(uc => uc.UserId == userId && uc.ContactId == cm.Chat.Members
+                        .Where(m => m.UserId != userId)
+                        .Select(m => m.UserId)
+                        .FirstOrDefault())
             })
             .ToListAsync();
 
@@ -232,6 +237,7 @@ public record ChatDto
     public string? AvatarUrl { get; set; }
     public int UnreadCount { get; set; }
     public string? LastMessage { get; set; }
+    public bool IsContact { get; set; }
 }
 
 public record MessageDto
