@@ -105,7 +105,7 @@ const togglePackFromModal = async () => {
   }
 };
 
-// ===== КОНТАКТЫ =====
+// ===== КОНТАКТЫ ====
 const isAddContactsOpen = ref(false);
 const contactSearch = ref('');
 const selectedUserIds = ref<Set<string>>(new Set());
