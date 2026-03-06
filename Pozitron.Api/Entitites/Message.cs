@@ -23,5 +23,6 @@ public enum MessageType
     Video,
     Gif,
     Voice,
-    Emoji
+    Emoji,
+    Sticker
 }

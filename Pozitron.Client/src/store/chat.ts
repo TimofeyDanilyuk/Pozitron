@@ -26,7 +26,7 @@ interface Chat {
 export const useChatStore = defineStore('chat', {
   state: () => ({
     chats: [] as Chat[],
-    messages: {} as Record<string, Message[]>, // chatId -> messages
+    messages: {} as Record<string, Message[]>,
     activeChat: null as Chat | null,
     onlineUsers: [] as string[],
     connection: null as signalR.HubConnection | null,
@@ -45,11 +45,13 @@ export const useChatStore = defineStore('chat', {
         .withAutomaticReconnect()
         .build();
 
+      // Входящее сообщение
       this.connection.on('ReceiveMessage', (msg: Message) => {
         if (!this.messages[msg.chatId]) this.messages[msg.chatId] = [];
-        if (!this.messages[msg.chatId]) this.messages[msg.chatId] = [];
-        this.messages[msg.chatId]!.push(msg);
-        // Обновляем lastMessage в списке чатов
+        // Защита от дублей
+        const already = this.messages[msg.chatId]!.find(m => m.id === msg.id);
+        if (!already) this.messages[msg.chatId]!.push(msg);
+        // Обновляем превью последнего сообщения
         const chat = this.chats.find(c => c.id === msg.chatId);
         if (chat) chat.lastMessage = msg.content;
       });
@@ -66,26 +68,40 @@ export const useChatStore = defineStore('chat', {
         this.onlineUsers = this.onlineUsers.filter(id => id !== userId);
       });
 
+      // Новый DM чат — добавляем в список
       this.connection.on('NewDmChat', (chat: Chat) => {
-      if (!this.chats.find(c => c.id === chat.id)) {
+        if (!this.chats.find(c => c.id === chat.id)) {
           this.chats.push(chat);
-      }
+        }
       });
 
+      // Обновление счётчика непрочитанных
       this.connection.on('UnreadUpdated', ({ chatId, unreadCount }: { chatId: string, unreadCount: number }) => {
-          const chat = this.chats.find(c => c.id === chatId);
-          if (chat) chat.unreadCount = unreadCount;
+        const chat = this.chats.find(c => c.id === chatId);
+        if (chat) chat.unreadCount = unreadCount;
+      });
+
+      // После reconnect — переподключаемся ко всем чатам
+      this.connection.onreconnected(async () => {
+        await this._joinAllChats();
+        if (this.activeChat) {
+          const { data } = await api.get(`/chat/${this.activeChat.id}/messages`);
+          this.messages[this.activeChat.id] = data;
+        }
       });
 
       await this.connection.start();
 
+      // Joinим все чаты сразу — чтобы получать сообщения из всех
+      await this._joinAllChats();
+
+      // Переподключение когда возвращаемся на вкладку
       document.addEventListener('visibilitychange', async () => {
         if (document.visibilityState === 'visible') {
           if (this.connection?.state === signalR.HubConnectionState.Disconnected) {
             await this.connection.start();
-            if (this.activeChat) {
-              await this.connection.invoke('JoinChat', this.activeChat.id);
-            }
+            await this._joinAllChats();
+            await this.loadChats();
             if (this.activeChat) {
               const { data } = await api.get(`/chat/${this.activeChat.id}/messages`);
               this.messages[this.activeChat.id] = data;
@@ -95,6 +111,13 @@ export const useChatStore = defineStore('chat', {
       });
     },
 
+    // Joinим все чаты пользователя чтобы получать сообщения из всех
+    async _joinAllChats() {
+      for (const chat of this.chats) {
+        await this.connection?.invoke('JoinChat', chat.id);
+      }
+    },
+
     async disconnect() {
       await this.connection?.stop();
     },
@@ -102,21 +125,19 @@ export const useChatStore = defineStore('chat', {
     async loadChats() {
       const { data } = await api.get('/chat');
       this.chats = data;
+      await this._joinAllChats();
     },
 
     async openChat(chat: Chat) {
-        if (this.activeChat?.id === chat.id) return;
-        if (this.activeChat) {
-            await this.connection?.invoke('LeaveChat', this.activeChat.id);
-        }
-        this.activeChat = chat;
-        chat.unreadCount = 0;
-        await this.connection?.invoke('JoinChat', chat.id);
-        await api.post(`/chat/${chat.id}/read`);
-        if (!this.messages[chat.id]) {
-            const { data } = await api.get(`/chat/${chat.id}/messages`);
-            this.messages[chat.id] = data;
-        }
+      if (this.activeChat?.id === chat.id) return;
+      this.activeChat = chat;
+      chat.unreadCount = 0;
+      await this.connection?.invoke('JoinChat', chat.id);
+      await api.post(`/chat/${chat.id}/read`).catch(() => {});
+      if (!this.messages[chat.id]) {
+        const { data } = await api.get(`/chat/${chat.id}/messages`);
+        this.messages[chat.id] = data;
+      }
     },
 
     async sendMessage(content: string) {
@@ -131,7 +152,6 @@ export const useChatStore = defineStore('chat', {
 
     async openDm(targetUserId: string) {
       const { data } = await api.post(`/chat/dm/${targetUserId}`);
-      // Перезагружаем чаты и открываем нужный
       await this.loadChats();
       const chat = this.chats.find(c => c.id === data.id);
       if (chat) await this.openChat(chat);

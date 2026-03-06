@@ -103,4 +103,43 @@ public class ChatHub : Hub
             }
         }
     }
+
+    public async Task SendSticker(string chatId, string stickerId)
+    {
+        var userId = Guid.Parse(Context.User!.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return;
+
+        var sticker = await _context.Stickers.FindAsync(Guid.Parse(stickerId));
+        if (sticker == null) return;
+
+        var message = new Message
+        {
+            Id = Guid.NewGuid(),
+            ChatId = Guid.Parse(chatId),
+            UserId = userId,
+            Content = stickerId,         // id стикера
+            AttachmentUrl = sticker.Url, // url картинки
+            Type = MessageType.Sticker,
+            SentAt = DateTime.UtcNow
+        };
+
+        _context.Messages.Add(message);
+        await _context.SaveChangesAsync();
+
+        await Clients.Group(chatId).SendAsync("ReceiveMessage", new
+        {
+            id = message.Id,
+            chatId,
+            content = stickerId,
+            attachmentUrl = sticker.Url,
+            type = "Sticker",
+            sentAt = message.SentAt,
+            userId = message.UserId,
+            username = user.Username,
+            avatarUrl = user.AvatarUrl,
+            emojiPrefix = user.EmojiPrefix,
+            packId = sticker.PackId
+        });
+    }
 }

@@ -15,6 +15,9 @@ namespace Pozitron.Api.Data
         public DbSet<Message> Messages => Set<Message>();
         public DbSet<Chat> Chats => Set<Chat>();
         public DbSet<ChatMember> ChatMembers => Set<ChatMember>();
+        public DbSet<StickerPack> StickerPacks => Set<StickerPack>();
+        public DbSet<Sticker> Stickers => Set<Sticker>();
+        public DbSet<UserStickerPack> UserStickerPacks => Set<UserStickerPack>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -33,7 +36,10 @@ namespace Pozitron.Api.Data
             modelBuilder.Entity<Chat>()
                 .HasMany(c => c.Messages)
                 .WithOne(m => m.Chat)
-                .HasForeignKey(m => m.ChatId);    
+                .HasForeignKey(m => m.ChatId);
+
+            modelBuilder.Entity<UserStickerPack>()
+                .HasKey(usp => new { usp.UserId, usp.PackId });
         }
     }
 }
