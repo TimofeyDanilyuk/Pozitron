@@ -15,6 +15,7 @@ export interface Message {
   username: string;
   avatarUrl?: string;
   emojiPrefix?: string;
+  isRead?: boolean;
 }
 
 interface Chat {

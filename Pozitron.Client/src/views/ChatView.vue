@@ -412,21 +412,47 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
               <!-- Стикер -->
               <div v-if="msg.type === 'Sticker' && msg.attachmentUrl"
-                   @click="msg.packId && onStickerClick(msg.packId)"
-                   class="cursor-pointer active:scale-95 transition-transform">
+                  @click="msg.packId && onStickerClick(msg.packId)"
+                  class="cursor-pointer active:scale-95 transition-transform relative">
                 <img :src="msg.attachmentUrl"
-                     class="w-32 h-32 object-contain rounded-2xl"
-                     draggable="false"
-                     oncontextmenu="return false">
+                    class="w-32 h-32 object-contain rounded-2xl"
+                    draggable="false"
+                    oncontextmenu="return false">
+                <!-- Галочки под стикером -->
+                <span v-if="msg.userId === auth.user?.id"
+                      class="absolute bottom-1 right-1 opacity-70">
+                  <svg v-if="!msg.isRead" viewBox="0 0 16 16" class="w-3.5 h-3.5 fill-white drop-shadow">
+                    <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 20 16" class="w-4 h-3.5 fill-white drop-shadow">
+                    <path d="M15.5 3.5L8 11L4.5 7.5L3.5 8.5L8 13L16.5 4.5L15.5 3.5Z"/>
+                    <path d="M11.5 3.5L9 6l-1-1-1 1 2 2 3.5-3.5L11.5 3.5Z" opacity="0.7"/>
+                  </svg>
+                </span>
               </div>
 
               <!-- Обычное сообщение -->
-              <div v-else :class="[
-                'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed',
+             <div v-else :class="[
+                'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed relative',
                 msg.userId === auth.user?.id
                   ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm'
                   : 'bg-slate-800 text-slate-100 rounded-bl-sm'
-              ]">{{ msg.content }}</div>
+              ]">
+                {{ msg.content }}
+                <!-- Галочки — только для своих сообщений -->
+                <span v-if="msg.userId === auth.user?.id"
+                      class="inline-flex items-center ml-2 opacity-70 translate-y-0.5">
+                  <!-- Одна галочка — не прочитано -->
+                  <svg v-if="!msg.isRead" viewBox="0 0 16 16" class="w-3.5 h-3.5 fill-white/80">
+                    <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
+                  </svg>
+                  <!-- Две галочки — прочитано -->
+                  <svg v-else viewBox="0 0 20 16" class="w-4 h-3.5 fill-white">
+                    <path d="M15.5 3.5L8 11L4.5 7.5L3.5 8.5L8 13L16.5 4.5L15.5 3.5Z"/>
+                    <path d="M11.5 3.5L9 6l-1-1-1 1 2 2 3.5-3.5L11.5 3.5Z" opacity="0.7"/>
+                  </svg>
+                </span>
+              </div>
             </div>
           </div>
         </template>
