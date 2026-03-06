@@ -86,7 +86,8 @@ public class ChatHub : Hub
             userId = message.UserId,
             username = user.Username,
             avatarUrl = user.AvatarUrl,
-            emojiPrefix = user.EmojiPrefix
+            emojiPrefix = user.EmojiPrefix,
+            isRead = false
         });
 
         foreach (var member in members)
@@ -121,7 +122,7 @@ public class ChatHub : Hub
             Content = stickerId,         // id стикера
             AttachmentUrl = sticker.Url, // url картинки
             Type = MessageType.Sticker,
-            SentAt = DateTime.UtcNow
+            SentAt = DateTime.UtcNow,
         };
 
         _context.Messages.Add(message);
@@ -139,7 +140,8 @@ public class ChatHub : Hub
             username = user.Username,
             avatarUrl = user.AvatarUrl,
             emojiPrefix = user.EmojiPrefix,
-            packId = sticker.PackId
+            packId = sticker.PackId,
+            isRead = false
         });
     }
 }

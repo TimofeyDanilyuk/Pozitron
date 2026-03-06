@@ -101,7 +101,8 @@ public class ChatController : ControllerBase
                 UserId = m.UserId,
                 Username = m.User!.Username,
                 AvatarUrl = m.User.AvatarUrl,
-                EmojiPrefix = m.User.EmojiPrefix
+                EmojiPrefix = m.User.EmojiPrefix,
+                IsRead = m.IsRead
             })
             .ToListAsync();
 
@@ -199,7 +200,24 @@ public class ChatController : ControllerBase
         if (member != null)
         {
             member.UnreadCount = 0;
+
+            var unreadMessages = await _context.Messages
+                .Where(m => m.ChatId == chatId && m.UserId != userId && !m.IsRead)
+                .ToListAsync();
+
+            foreach (var msg in unreadMessages)
+                msg.IsRead = true;
+
             await _context.SaveChangesAsync();
+
+            var senderIds = unreadMessages.Select(m => m.UserId.ToString()).Distinct();
+            foreach (var senderId in senderIds)
+            {
+                if (ChatHub.OnlineUsers.TryGetValue(senderId, out var connId))
+                {
+                    await _hub.Clients.Client(connId).SendAsync("MessagesRead", new { chatId });
+                }
+            }
         }
 
         return Ok();
@@ -228,4 +246,5 @@ public record MessageDto
     public string? Username { get; set; }
     public string? AvatarUrl { get; set; }
     public string? EmojiPrefix { get; set; }
+    public bool IsRead { get; set; }
 }

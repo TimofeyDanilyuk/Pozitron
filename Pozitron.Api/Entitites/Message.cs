@@ -14,6 +14,8 @@ public class Message
     public Chat? Chat { get; set; }
 
     public Guid ChatId { get; set; }
+
+    public bool IsRead { get; set; } = false;
 }
 
 public enum MessageType
