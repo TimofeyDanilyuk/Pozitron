@@ -4,9 +4,11 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Pozitron.Api.Data;
+using Pozitron.Api.Entitites;
 
 namespace Pozitron.Api.Controllers
 {
@@ -22,6 +24,60 @@ namespace Pozitron.Api.Controllers
         {
             _context = context;
             _environment = environment;
+        }
+
+        // Получить список контактов
+        [HttpGet("contacts")]
+        public async Task<IActionResult> GetContacts()
+        {
+            var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            var contacts = await _context.UserContacts
+                .Where(uc => uc.UserId == userId)
+                .Include(uc => uc.Contact)
+                .Select(uc => new {
+                    uc.Contact!.Id,
+                    uc.Contact.Username,
+                    uc.Contact.AvatarUrl,
+                    uc.Contact.EmojiPrefix,
+                    uc.AddedAt
+                })
+                .ToListAsync();
+            return Ok(contacts);
+        }
+
+        // Добавить контакт
+        [HttpPost("contacts/{contactId}")]
+        public async Task<IActionResult> AddContact(Guid contactId)
+        {
+            var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            
+            if (userId == contactId) return BadRequest("Нельзя добавить себя");
+            
+            var exists = await _context.UserContacts
+                .AnyAsync(uc => uc.UserId == userId && uc.ContactId == contactId);
+            if (exists) return BadRequest("Уже в контактах");
+
+            _context.UserContacts.Add(new UserContact {
+                UserId = userId,
+                ContactId = contactId
+            });
+            await _context.SaveChangesAsync();
+            return Ok();
+        }
+
+        // Удалить контакт
+        [HttpDelete("contacts/{contactId}")]
+        public async Task<IActionResult> RemoveContact(Guid contactId)
+        {
+            var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
+            var contact = await _context.UserContacts
+                .FirstOrDefaultAsync(uc => uc.UserId == userId && uc.ContactId == contactId);
+            
+            if (contact == null) return NotFound();
+            
+            _context.UserContacts.Remove(contact);
+            await _context.SaveChangesAsync();
+            return Ok();
         }
 
         [HttpPost("upload-avatar")]
@@ -87,7 +143,7 @@ namespace Pozitron.Api.Controllers
             if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 3)
                 return BadRequest("Ник должен быть не короче 3 символов");
 
-            if (_context.Users.Any(u => u.Username == request.Username))
+            if (await _context.Users.AnyAsync(u => u.Username == request.Username))
                 return BadRequest("Этот ник уже занят");
 
             var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);

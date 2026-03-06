@@ -18,6 +18,8 @@ namespace Pozitron.Api.Data
         public DbSet<StickerPack> StickerPacks => Set<StickerPack>();
         public DbSet<Sticker> Stickers => Set<Sticker>();
         public DbSet<UserStickerPack> UserStickerPacks => Set<UserStickerPack>();
+        public DbSet<UserContact> UserContacts => Set<UserContact>();
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -40,6 +42,21 @@ namespace Pozitron.Api.Data
 
             modelBuilder.Entity<UserStickerPack>()
                 .HasKey(usp => new { usp.UserId, usp.PackId });
+
+            modelBuilder.Entity<UserContact>()
+                .HasKey(uc => new { uc.UserId, uc.ContactId });
+
+            modelBuilder.Entity<UserContact>()
+                .HasOne(uc => uc.User)
+                .WithMany(u => u.Contacts)
+                .HasForeignKey(uc => uc.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<UserContact>()
+                .HasOne(uc => uc.Contact)
+                .WithMany()
+                .HasForeignKey(uc => uc.ContactId)
+                .OnDelete(DeleteBehavior.Restrict);    
         }
     }
 }

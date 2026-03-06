@@ -13,6 +13,8 @@ namespace Pozitron.Api.Entitites
         public UserRole Role { get; set; } = UserRole.User;
         public bool IsBanned { get; set; } = false;
 
+        public List<UserContact> Contacts { get; set; } = new();
+
         public string? SecurityQuestion { get; set; }
         public string? SecurityAnswerHash { get; set; }
 
