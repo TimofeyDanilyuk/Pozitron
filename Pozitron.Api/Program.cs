@@ -79,6 +79,7 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
+    // Миграция БД
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 
