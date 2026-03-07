@@ -199,30 +199,35 @@ public class ChatController : ControllerBase
     public async Task<IActionResult> MarkAsRead(Guid chatId)
     {
         var userId = CurrentUserId;
+
         var member = await _context.ChatMembers
             .FirstOrDefaultAsync(cm => cm.ChatId == chatId && cm.UserId == userId);
 
         if (member != null)
-        {
             member.UnreadCount = 0;
 
-            var unreadMessages = await _context.Messages
-                .Where(m => m.ChatId == chatId && m.UserId != userId && !m.IsRead)
-                .ToListAsync();
+        var unreadMessages = await _context.Messages
+            .Where(m => m.ChatId == chatId && m.UserId != userId && !m.IsRead)
+            .ToListAsync();
 
-            foreach (var msg in unreadMessages)
-                msg.IsRead = true;
+        foreach (var msg in unreadMessages)
+            msg.IsRead = true;
 
-            await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync();
 
-            var senderIds = unreadMessages.Select(m => m.UserId.ToString()).Distinct();
-            foreach (var senderId in senderIds)
-            {
-                if (ChatHub.OnlineUsers.TryGetValue(senderId, out var connId))
-                {
-                    await _hub.Clients.Client(connId).SendAsync("MessagesRead", new { chatId });
-                }
-            }
+        // Уведомляем отправителей если они онлайн
+        var senderIds = unreadMessages.Select(m => m.UserId.ToString()).Distinct().ToList();
+        foreach (var senderId in senderIds)
+        {
+            if (ChatHub.OnlineUsers.TryGetValue(senderId, out var connId))
+                await _hub.Clients.Client(connId).SendAsync("MessagesRead", new { chatId = chatId.ToString() });
+        }
+
+        // Для общего чата — уведомляем всех онлайн пользователей в группе
+        var chat = await _context.Chats.FindAsync(chatId);
+        if (chat?.Type == ChatType.General)
+        {
+            await _hub.Clients.Group(chatId.ToString()).SendAsync("MessagesRead", new { chatId = chatId.ToString() });
         }
 
         return Ok();
