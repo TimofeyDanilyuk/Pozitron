@@ -106,14 +106,16 @@ export const useChatStore = defineStore('chat', {
       });
 
       this.connection.on('MessagesRead', ({ chatId }: { chatId: string }) => {
-        const msgs = this.messages[chatId];
-        if (msgs) {
-          const auth = useAuthStore();
-          msgs.forEach(m => {
-            if (m.userId === auth.user?.id) m.isRead = true;
-          });
+        const key = Object.keys(this.messages).find(k => k.toLowerCase() === chatId.toLowerCase());
+        if (key) {
+            const auth = useAuthStore();
+            this.messages[key]!.forEach(m => {
+            if (m.userId.toLowerCase() === auth.user?.id?.toLowerCase()) {
+                m.isRead = true;
+            }
+            });
         }
-      });
+        });
 
       this.connection.onreconnected(async () => {
         await this._joinAllChats();

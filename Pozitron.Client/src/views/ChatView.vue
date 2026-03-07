@@ -513,15 +513,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                 <img :src="msg.attachmentUrl" class="w-32 h-32 object-contain rounded-2xl" draggable="false" oncontextmenu="return false">
                 <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
                   <!-- Одна галочка — не прочитано -->
-                  <svg v-if="!msg.isRead" viewBox="0 0 24 16" class="w-4 h-3.5 fill-white/80">
-                    <path d="M2 8L7 13L14 4"/>
-                    <path d="M2 8L7 13L14 4" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
+                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
 
                   <!-- Две галочки — прочитано -->
-                  <svg v-else viewBox="0 0 24 16" class="w-4 h-3.5 fill-none stroke-white stroke-[1.8px]">
-                    <path d="M1 8L6 13L13 4" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M7 8L12 13L19 4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
+                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </span>
               </div>
@@ -536,15 +535,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                 {{ msg.content }}
                 <span v-if="msg.userId === auth.user?.id" class="inline-flex items-center ml-2 opacity-70 translate-y-0.5">
                   <!-- Одна галочка — не прочитано -->
-                  <svg v-if="!msg.isRead" viewBox="0 0 24 16" class="w-4 h-3.5 fill-white/80">
-                    <path d="M2 8L7 13L14 4"/>
-                    <path d="M2 8L7 13L14 4" stroke="white" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
+                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
 
                   <!-- Две галочки — прочитано -->
-                  <svg v-else viewBox="0 0 24 16" class="w-4 h-3.5 fill-none stroke-white stroke-[1.8px]">
-                    <path d="M1 8L6 13L13 4" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M7 8L12 13L19 4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
+                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </span>
               </div>
