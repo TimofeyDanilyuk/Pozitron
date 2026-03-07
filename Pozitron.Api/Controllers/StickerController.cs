@@ -131,8 +131,20 @@ public class StickerController : ControllerBase
             if (file.ContentType.ToLower() == "video/mp4")
             {
                 Console.WriteLine("Converting mp4 to gif...");
-                Xabe.FFmpeg.FFmpeg.SetExecutablesPath("/usr/bin");
-                
+
+                // Найти ffmpeg автоматически
+                var whichProcess = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "which",
+                    Arguments = "ffmpeg",
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false
+                })!;
+                var ffmpegFullPath = whichProcess.StandardOutput.ReadToEnd().Trim();
+                var ffmpegDir = System.IO.Path.GetDirectoryName(ffmpegFullPath);
+                Console.WriteLine($"FFmpeg path: {ffmpegFullPath}");
+                Xabe.FFmpeg.FFmpeg.SetExecutablesPath(ffmpegDir);
+
                 // Сохраняем mp4 во временный файл
                 var tempMp4 = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.mp4");
                 using (var tempStream = new FileStream(tempMp4, FileMode.Create))
@@ -141,11 +153,8 @@ public class StickerController : ControllerBase
                 fileName = $"{Guid.NewGuid()}.gif";
                 filePath = Path.Combine(folderPath, fileName);
 
-                // Конвертируем mp4 → gif через FFmpeg
-                Xabe.FFmpeg.FFmpeg.SetExecutablesPath("/usr/bin");
                 var conversion = await Xabe.FFmpeg.FFmpeg.Conversions.FromSnippet.ToGif(
-                    tempMp4, filePath,0,0);
-                // Ограничиваем размер до 512x512 и fps до 15
+                    tempMp4, filePath, 0, 0);
                 conversion.AddParameter("-vf \"scale=512:512:force_original_aspect_ratio=decrease,fps=15\"");
                 await conversion.Start();
 
