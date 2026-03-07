@@ -105,117 +105,76 @@ public class StickerController : ControllerBase
     [HttpPost("{packId}/stickers")]
     public async Task<IActionResult> AddSticker(Guid packId, IFormFile file)
     {
-        try
+        var userId = CurrentUserId;
+        var pack = await _context.StickerPacks.FindAsync(packId);
+
+        if (pack == null) return NotFound();
+        if (pack.CreatedByUserId != userId) return Forbid();
+
+        var allowedTypes = new[] { "image/png", "image/jpeg", "image/gif", "image/webp" };
+        if (!allowedTypes.Contains(file.ContentType.ToLower()))
+            return BadRequest("Разрешены только png, jpg, gif, webp");
+
+        // GIF — только ограничение по размеру
+        var maxSize = file.ContentType.ToLower() == "image/gif" ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
+        if (file.Length > maxSize)
+            return BadRequest(file.ContentType.ToLower() == "image/gif"
+                ? "GIF слишком большой (макс. 2MB)"
+                : "Файл слишком большой (макс. 5MB)");
+
+        var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var folderPath = Path.Combine(rootPath, "uploads", "stickers", packId.ToString());
+        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+
+        var isGif = file.ContentType.ToLower() == "image/gif";
+        var extension = isGif ? ".gif" : ".png";
+        var fileName = $"{Guid.NewGuid()}{extension}";
+        var filePath = Path.Combine(folderPath, fileName);
+
+        if (isGif)
         {
-            Console.WriteLine($"AddSticker: contentType={file.ContentType}, size={file.Length}");
-            var userId = CurrentUserId;
-            var pack = await _context.StickerPacks.FindAsync(packId);
-
-            if (pack == null) return NotFound();
-            if (pack.CreatedByUserId != userId) return Forbid();
-
-            var allowedTypes = new[] { "image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4" };
-            if (!allowedTypes.Contains(file.ContentType.ToLower()))
-                return BadRequest("Разрешены только png, jpg, gif, webp, mp4");
-
-            if (file.Length > 50 * 1024 * 1024)
-                return BadRequest("Файл слишком большой (макс. 50MB)");
-
-            var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-            var folderPath = Path.Combine(rootPath, "uploads", "stickers", packId.ToString());
-            if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
-
-            string fileName;
-            string filePath;
-
-            if (file.ContentType.ToLower() == "video/mp4")
-            {
-                Console.WriteLine("Converting mp4 to gif...");
-
-                // Найти ffmpeg автоматически
-                var whichProcess = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = "which",
-                    Arguments = "ffmpeg",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false
-                })!;
-                var ffmpegFullPath = whichProcess.StandardOutput.ReadToEnd().Trim();
-                var ffmpegDir = System.IO.Path.GetDirectoryName(ffmpegFullPath);
-                Console.WriteLine($"FFmpeg path: {ffmpegFullPath}");
-                Xabe.FFmpeg.FFmpeg.SetExecutablesPath(ffmpegDir);
-
-                // Сохраняем mp4 во временный файл
-                var tempMp4 = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.mp4");
-                using (var tempStream = new FileStream(tempMp4, FileMode.Create))
-                    await file.CopyToAsync(tempStream);
-
-                fileName = $"{Guid.NewGuid()}.gif";
-                filePath = Path.Combine(folderPath, fileName);
-
-                var conversion = await Xabe.FFmpeg.FFmpeg.Conversions.FromSnippet.ToGif(
-                    tempMp4, filePath, 0, 0);
-                conversion.AddParameter("-vf \"scale=512:512:force_original_aspect_ratio=decrease,fps=15\"");
-                await conversion.Start();
-
-                System.IO.File.Delete(tempMp4);
-
-                Console.WriteLine("Conversion done.");
-            }
-            else if (file.ContentType.ToLower() == "image/gif")
-            {
-                if (file.Length > 2 * 1024 * 1024)
-                    return BadRequest("GIF слишком большой (макс. 2MB)");
-
-                fileName = $"{Guid.NewGuid()}.gif";
-                filePath = Path.Combine(folderPath, fileName);
-                using var stream = new FileStream(filePath, FileMode.Create);
-                await file.CopyToAsync(stream);
-            }
-            else
-            {
-                if (file.Length > 5 * 1024 * 1024)
-                    return BadRequest("Файл слишком большой (макс. 5MB)");
-
-                fileName = $"{Guid.NewGuid()}.png";
-                filePath = Path.Combine(folderPath, fileName);
-
-                using var inputStream = file.OpenReadStream();
-                using var image = await SixLabors.ImageSharp.Image.LoadAsync(inputStream);
-                if (image.Width > 512 || image.Height > 512)
-                {
-                    image.Mutate(x => x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
-                    {
-                        Size = new SixLabors.ImageSharp.Size(512, 512),
-                        Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max
-                    }));
-                }
-                await image.SaveAsPngAsync(filePath);
-            }
-
-            var baseUrl = $"{Request.Scheme}://{Request.Host}";
-            var url = $"{baseUrl}/uploads/stickers/{packId}/{fileName}";
-
-            var order = await _context.Stickers.CountAsync(s => s.PackId == packId);
-            var sticker = new Sticker
-            {
-                Id = Guid.NewGuid(),
-                PackId = packId,
-                Url = url,
-                Order = order
-            };
-
-            _context.Stickers.Add(sticker);
-            if (pack.CoverUrl == null) pack.CoverUrl = url;
-            await _context.SaveChangesAsync();
-
-            return Ok(new { sticker.Id, sticker.Url });
+            // GIF сохраняем как есть
+            using var stream = new FileStream(filePath, FileMode.Create);
+            await file.CopyToAsync(stream);
         }
-        catch(Exception ex)
+        else
         {
-            Console.WriteLine($"ERROR in AddSticker: {ex}");
-            return StatusCode(500, ex.Message);
+            // PNG/JPG — ресайзим до 512x512 и сохраняем как PNG
+            using var inputStream = file.OpenReadStream();
+            using var image = await SixLabors.ImageSharp.Image.LoadAsync(inputStream);
+
+            // Ресайз только если больше 512px
+            if (image.Width > 512 || image.Height > 512)
+            {
+                image.Mutate(x => x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
+                {
+                    Size = new SixLabors.ImageSharp.Size(512, 512),
+                    Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max
+                }));
+            }
+
+            await image.SaveAsPngAsync(filePath);
         }
+
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var url = $"{baseUrl}/uploads/stickers/{packId}/{fileName}";
+
+        var order = await _context.Stickers.CountAsync(s => s.PackId == packId);
+        var sticker = new Sticker
+        {
+            Id = Guid.NewGuid(),
+            PackId = packId,
+            Url = url,
+            Order = order
+        };
+
+        _context.Stickers.Add(sticker);
+
+        if (pack.CoverUrl == null)
+            pack.CoverUrl = url;
+
+        await _context.SaveChangesAsync();
+        return Ok(new { sticker.Id, sticker.Url });
     }
 
     // Удалить стикер из пака
