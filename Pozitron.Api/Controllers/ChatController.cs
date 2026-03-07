@@ -31,15 +31,15 @@ public class ChatController : ControllerBase
         var userId = CurrentUserId;
 
         // Общий канал
-        var general = await _context.Chats
-            .Where(c => c.Type == ChatType.General)
-            .Select(c => new ChatDto
+        var general = await _context.ChatMembers
+            .Where(cm => cm.UserId == userId && cm.Chat!.Type == ChatType.General)
+            .Select(cm => new ChatDto
             {
-                Id = c.Id,
-                Type = c.Type,
-                Name = c.Name,
-                UnreadCount = 0,
-                LastMessage = c.Messages
+                Id = cm.Chat!.Id,
+                Type = cm.Chat.Type,
+                Name = cm.Chat.Name,
+                UnreadCount = cm.UnreadCount,
+                LastMessage = cm.Chat.Messages
                     .OrderByDescending(m => m.SentAt)
                     .Select(m => m.Content)
                     .FirstOrDefault()

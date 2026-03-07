@@ -106,17 +106,14 @@ export const useChatStore = defineStore('chat', {
       });
 
       this.connection.on('MessagesRead', ({ chatId }: { chatId: string }) => {
-        console.log('MessagesRead received:', chatId);
         const key = Object.keys(this.messages).find(k => k.toLowerCase() === chatId.toLowerCase());
-        console.log('Found key:', key, 'messages keys:', Object.keys(this.messages));
         if (key) {
-            const auth = useAuthStore();
-            this.messages[key]!.forEach(m => {
-            console.log('checking msg userId:', m.userId, 'vs auth:', auth.user?.id);
+          const auth = useAuthStore();
+          this.messages[key]!.forEach(m => {
             if (m.userId.toLowerCase() === auth.user?.id?.toLowerCase()) {
-                m.isRead = true;
+              m.isRead = true;
             }
-            });
+          });
         }
       });
 
@@ -163,19 +160,16 @@ export const useChatStore = defineStore('chat', {
     },
 
     async openChat(chat: Chat) {
-        if (this.activeChat?.id === chat.id) return;
-        this.activeChat = chat;
-        chat.unreadCount = 0;
-        await this.connection?.invoke('JoinChat', chat.id);
-        console.log('Sending read for chat:', chat.id);
-        const result = await api.post(`/chat/${chat.id}/read`).catch((e) => {
-            console.error('Read failed:', e);
-        });
-        console.log('Read result:', result);
-        if (!this.messages[chat.id]) {
-            const { data } = await api.get(`/chat/${chat.id}/messages`);
-            this.messages[chat.id] = data;
-        }
+      if (this.activeChat?.id === chat.id) return;
+      this.activeChat = chat;
+      chat.unreadCount = 0;
+      await this.connection?.invoke('JoinChat', chat.id);
+      // Сначала загружаем сообщения, потом помечаем прочитанными
+      if (!this.messages[chat.id]) {
+        const { data } = await api.get(`/chat/${chat.id}/messages`);
+        this.messages[chat.id] = data;
+      }
+      await api.post(`/chat/${chat.id}/read`).catch(() => {});
     },
 
     async sendMessage(content: string) {

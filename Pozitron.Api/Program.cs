@@ -84,6 +84,24 @@ using (var scope = app.Services.CreateScope())
 
     db.Database.Migrate();
 
+    var generalChatId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+    var allUsers = db.Users.ToList();
+    foreach (var user in allUsers)
+    {
+        var alreadyMember = db.ChatMembers
+            .Any(cm => cm.ChatId == generalChatId && cm.UserId == user.Id);
+        if (!alreadyMember)
+        {
+            db.ChatMembers.Add(new ChatMember
+            {
+                ChatId = generalChatId,
+                UserId = user.Id,
+                UnreadCount = 0
+            });
+        }
+    }
+    db.SaveChanges();
+
     if (!db.Chats.Any(c => c.Type == ChatType.General))
     {
         db.Chats.Add(new Chat

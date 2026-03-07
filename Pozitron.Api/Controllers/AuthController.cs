@@ -52,6 +52,19 @@ namespace Pozitron.Api.Controllers
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
 
+            var generalChat = await _context.Chats
+                .FirstOrDefaultAsync(c => c.Type == ChatType.General);
+            if (generalChat != null)
+            {
+                _context.ChatMembers.Add(new ChatMember
+                {
+                    ChatId = generalChat.Id,
+                    UserId = user.Id,
+                    UnreadCount = 0
+                });
+                await _context.SaveChangesAsync();
+            }
+
             return Ok(new { message = "Регистрация успешна!", userId = user.Id });
         }
 
