@@ -160,15 +160,19 @@ export const useChatStore = defineStore('chat', {
     },
 
     async openChat(chat: Chat) {
-      if (this.activeChat?.id === chat.id) return;
-      this.activeChat = chat;
-      chat.unreadCount = 0;
-      await this.connection?.invoke('JoinChat', chat.id);
-      await api.post(`/chat/${chat.id}/read`).catch(() => {});
-      if (!this.messages[chat.id]) {
-        const { data } = await api.get(`/chat/${chat.id}/messages`);
-        this.messages[chat.id] = data;
-      }
+        if (this.activeChat?.id === chat.id) return;
+        this.activeChat = chat;
+        chat.unreadCount = 0;
+        await this.connection?.invoke('JoinChat', chat.id);
+        console.log('Sending read for chat:', chat.id);
+        const result = await api.post(`/chat/${chat.id}/read`).catch((e) => {
+            console.error('Read failed:', e);
+        });
+        console.log('Read result:', result);
+        if (!this.messages[chat.id]) {
+            const { data } = await api.get(`/chat/${chat.id}/messages`);
+            this.messages[chat.id] = data;
+        }
     },
 
     async sendMessage(content: string) {
