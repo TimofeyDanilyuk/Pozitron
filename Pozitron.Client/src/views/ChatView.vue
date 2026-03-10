@@ -33,6 +33,11 @@ const uploadingSticker = ref(false);
 const stickerPackModal = ref<null | { id: string, name: string, coverUrl?: string, stickers: any[], isAdded: boolean, createdBy: string }>(null);
 const stickerPackModalLoading = ref(false);
 
+
+// Спиннеры
+const chatsLoading = ref(false);
+const messagesLoading = ref(false);
+
 const activePack = computed(() =>
   chat.stickerPacks.find(p => p.id === activeStickerPackId.value) || chat.stickerPacks[0] || null
 );
@@ -199,8 +204,10 @@ const scrollToBottom = () => {
 watch(currentMessages, scrollToBottom, { deep: true });
 
 onMounted(async () => {
+  chatsLoading.value = true;
   await chat.connect();
   await chat.loadChats();
+  chatsLoading.value = false;
   if (window.innerWidth >= 768) {
     const general = chat.chats.find(c => c.type === 0);
     if (general) await chat.openChat(general);
@@ -210,7 +217,9 @@ onMounted(async () => {
 onUnmounted(() => chat.disconnect());
 
 const openChat = async (c: any) => {
+  messagesLoading.value = true;
   await chat.openChat(c);
+  messagesLoading.value = false;
   mobileView.value = 'chat';
 };
 
@@ -342,7 +351,11 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
       <!-- Список чатов -->
       <div class="flex-1 overflow-y-auto">
-        <div v-if="chat.chats.length === 0" class="flex flex-col items-center justify-center h-full opacity-20 px-10 text-center">
+        <div v-if="chatsLoading" class="flex flex-col items-center justify-center h-full gap-3">
+          <div class="w-7 h-7 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-xs text-slate-500">Загрузка чатов...</p>
+        </div>
+        <div v-else-if="chat.chats.length === 0" class="flex flex-col items-center justify-center h-full opacity-20 px-10 text-center">
           <span class="text-4xl mb-2">💬</span>
           <p class="text-xs uppercase tracking-widest font-bold">Список пуст</p>
         </div>
@@ -484,20 +497,31 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
       <!-- Лента сообщений -->
       <div class="flex-1 px-3 py-4 overflow-y-auto z-10 space-y-3 select-text">
-        <div v-if="!chat.activeChat" class="flex h-full items-center justify-center opacity-20">
+
+        <!-- Спиннер загрузки сообщений -->
+        <div v-if="messagesLoading" class="flex h-full items-center justify-center">
+          <div class="flex flex-col items-center gap-3 opacity-50">
+            <div class="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-xs text-slate-500">Загрузка сообщений...</p>
+          </div>
+        </div>
+
+        <!-- Нет активного чата -->
+        <div v-else-if="!chat.activeChat" class="flex h-full items-center justify-center opacity-20">
           <div class="text-center">
             <p class="text-4xl mb-2">💬</p>
             <p class="text-sm italic font-medium">Выберите чат</p>
           </div>
         </div>
 
-        <template v-if="chat.activeChat">
+        <!-- Сообщения -->
+        <template v-else>
           <div v-if="currentMessages.length === 0" class="flex justify-center pt-10 opacity-30">
             <p class="text-sm italic">Сообщений пока нет. Будь первым!</p>
           </div>
 
           <div v-for="msg in currentMessages" :key="msg.id"
-               :class="['flex gap-2 items-end', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+              :class="['flex gap-2 items-end', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
             <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
             <div v-else class="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mb-5">
               {{ msg.username?.[0]?.toUpperCase() }}
@@ -508,16 +532,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
               <!-- Стикер -->
               <div v-if="msg.type === 'Sticker' && msg.attachmentUrl"
-                   @click="msg.packId && onStickerClick(msg.packId)"
-                   class="cursor-pointer active:scale-95 transition-transform relative">
+                  @click="msg.packId && onStickerClick(msg.packId)"
+                  class="cursor-pointer active:scale-95 transition-transform relative">
                 <img :src="msg.attachmentUrl" class="w-32 h-32 object-contain rounded-2xl" draggable="false" oncontextmenu="return false">
                 <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
-                  <!-- Одна галочка — не прочитано -->
                   <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
                     <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-
-                  <!-- Две галочки — прочитано -->
                   <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
                     <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -534,12 +555,9 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               ]">
                 {{ msg.content }}
                 <span v-if="msg.userId === auth.user?.id" class="inline-flex items-center ml-2 opacity-70 translate-y-0.5">
-                  <!-- Одна галочка — не прочитано -->
                   <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
                     <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
-
-                  <!-- Две галочки — прочитано -->
                   <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
                     <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
