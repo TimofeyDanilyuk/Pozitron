@@ -56,7 +56,7 @@ export const useChatStore = defineStore('chat', {
 
   getters: {
     contactChats: (state) => state.chats.filter(c => c.type === 1 && c.isContact),
-    otherChats: (state) => state.chats.filter(c => !c.isContact),
+    otherChats: (state) => state.chats.filter(c => c.type === 0 || (c.type === 1 && !c.isContact)),
   },
 
   actions: {
