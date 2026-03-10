@@ -17,11 +17,84 @@ const usernameError = ref('');
 const searchQuery = ref('');
 const isSearchOpen = ref(false);
 const messagesEnd = ref<HTMLElement | null>(null);
+const messagesContainer = ref<HTMLElement | null>(null);
+const showScrollButton = ref(false);
+
+const onMessagesScroll = () => {
+  if (!messagesContainer.value) return;
+  const { scrollTop, scrollHeight, clientHeight } = messagesContainer.value;
+  showScrollButton.value = scrollHeight - scrollTop - clientHeight > 150;
+};
+
+const scrollToBottomSmooth = () => {
+  messagesEnd.value?.scrollIntoView({ behavior: 'smooth' });
+};
 const isEmojiPickerOpen = ref(false);
 const emojiSearch = ref('');
 const isChatEmojiPickerOpen = ref(false);
 const chatEmojiSearch = ref('');
 const mobileView = ref<'list' | 'chat'>('list');
+
+// ===== КОНТЕКСТНОЕ МЕНЮ =====
+const contextMenu = ref<{ x: number; y: number; msg: any } | null>(null);
+const reactionPicker = ref<{ x: number; y: number; msgId: string } | null>(null);
+const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+
+const onMessageLongPress = (event: TouchEvent | MouseEvent, msg: any) => {
+  longPressTimer = setTimeout(() => showContextMenu(event, msg), 500);
+};
+
+const onMessageLongPressCancel = () => {
+  if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+};
+
+const showContextMenu = (event: TouchEvent | MouseEvent, msg: any) => {
+  event.preventDefault();
+
+  let clientX = 0;
+  let clientY = 0;
+
+  if (event instanceof TouchEvent) {
+    const touch = event.changedTouches[0];
+    if (!touch) return;
+
+    clientX = touch.clientX;
+    clientY = touch.clientY;
+  } else {
+    clientX = event.clientX;
+    clientY = event.clientY;
+  }
+
+  const x = Math.min(clientX, window.innerWidth - 168);
+  const y = Math.min(clientY, window.innerHeight - 120);
+
+  contextMenu.value = { x, y, msg };
+  reactionPicker.value = null;
+};
+
+const closeContextMenu = () => {
+  contextMenu.value = null;
+  reactionPicker.value = null;
+};
+
+const onReplyFromMenu = () => {
+  if (!contextMenu.value) return;
+  chat.setReply(contextMenu.value.msg);
+  closeContextMenu();
+};
+
+const onReactFromMenu = () => {
+  if (!contextMenu.value) return;
+  reactionPicker.value = { x: contextMenu.value.x, y: contextMenu.value.y, msgId: contextMenu.value.msg.id };
+  contextMenu.value = null;
+};
+
+const sendReaction = async (emoji: string) => {
+  if (!reactionPicker.value) return;
+  await chat.addReaction(reactionPicker.value.msgId, emoji);
+  reactionPicker.value = null;
+};
 
 // ===== ТЕМА =====
 const isDark = ref(true);
@@ -553,7 +626,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       </header>
 
       <!-- Лента сообщений -->
-      <div class="flex-1 px-3 py-4 overflow-y-auto z-10 space-y-3 select-text">
+      <div ref="messagesContainer" @scroll="onMessagesScroll" class="flex-1 px-3 py-4 overflow-y-auto z-10 space-y-3 select-text relative">
 
         <div v-if="messagesLoading" class="flex h-full items-center justify-center">
           <div class="flex flex-col items-center gap-3 opacity-50">
@@ -584,72 +657,81 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
               <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ msg.emojiPrefix }} {{ msg.username }} · {{ formatTime(msg.sentAt) }}</span>
 
-              <!-- Стикер -->
-              <div v-if="msg.type === 'Sticker' && msg.attachmentUrl"
-                   @click="msg.packId && onStickerClick(msg.packId)"
-                   class="cursor-pointer active:scale-95 transition-transform relative">
-                <img :src="msg.attachmentUrl" class="w-32 h-32 object-contain rounded-2xl" draggable="false" oncontextmenu="return false">
-                <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
-                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
-                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
-                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-              </div>
+              <!-- Блок сообщения с контекстным меню -->
+              <div
+                @contextmenu.prevent="showContextMenu($event, msg)"
+                @touchstart="onMessageLongPress($event, msg)"
+                @touchend="onMessageLongPressCancel"
+                @touchmove="onMessageLongPressCancel"
+                class="relative">
 
-              <!-- Изображение -->
-              <div v-else-if="msg.type === 'Image' && msg.attachmentUrl" class="relative">
-                <img :src="msg.attachmentUrl"
-                     class="max-w-xs rounded-2xl object-cover cursor-pointer"
-                     draggable="false" oncontextmenu="return false"
-                     @click="openImage(msg.attachmentUrl!)">
-                <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
-                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
-                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
-                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-              </div>
+                <!-- Превью ответа -->
+                <div v-if="msg.replyToUsername"
+                     :class="['mb-1 px-2 py-1 rounded-xl border-l-2 border-purple-400 text-xs opacity-70 max-w-full',
+                       msg.userId === auth.user?.id ? 'bg-white/10' : 'bg-slate-300/50 dark:bg-slate-700/50']">
+                  <p class="font-bold text-purple-400 truncate">{{ msg.replyToUsername }}</p>
+                  <p class="truncate text-slate-600 dark:text-slate-300">{{ msg.replyToContent }}</p>
+                </div>
 
-              <!-- Видео -->
-              <div v-else-if="msg.type === 'Video' && msg.attachmentUrl" class="relative">
-                <video :src="msg.attachmentUrl" controls class="max-w-xs rounded-2xl"></video>
-                <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
-                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
-                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
-                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-              </div>
+                <!-- Стикер -->
+                <div v-if="msg.type === 'Sticker' && msg.attachmentUrl"
+                     @click="msg.packId && onStickerClick(msg.packId)"
+                     class="cursor-pointer active:scale-95 transition-transform relative">
+                  <img :src="msg.attachmentUrl" class="w-32 h-32 object-contain rounded-2xl" draggable="false" oncontextmenu="return false">
+                  <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
+                    <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                </div>
 
-              <!-- Обычное сообщени -->
-              <div v-else :class="[
-                'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed',
-                msg.userId === auth.user?.id
-                  ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm'
-                  : 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm'
-              ]">
-                {{ msg.content }}
-                <span v-if="msg.userId === auth.user?.id" class="inline-flex items-center ml-2 opacity-70 translate-y-0.5">
-                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
-                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
-                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </span>
-              </div>
+                <!-- Изображение -->
+                <div v-else-if="msg.type === 'Image' && msg.attachmentUrl" class="relative">
+                  <img :src="msg.attachmentUrl" class="max-w-xs rounded-2xl object-cover cursor-pointer"
+                       draggable="false" oncontextmenu="return false" @click="openImage(msg.attachmentUrl!)">
+                  <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
+                    <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                </div>
 
+                <!-- Видео -->
+                <div v-else-if="msg.type === 'Video' && msg.attachmentUrl" class="relative">
+                  <video :src="msg.attachmentUrl" controls class="max-w-xs rounded-2xl"></video>
+                  <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
+                    <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                </div>
+
+                <!-- Обычное сообщение -->
+                <div v-else :class="[
+                  'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed',
+                  msg.userId === auth.user?.id
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm'
+                ]">
+                  {{ msg.content }}
+                  <span v-if="msg.userId === auth.user?.id" class="inline-flex items-center ml-2 opacity-70 translate-y-0.5">
+                    <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                </div>
+
+                <!-- Реакции -->
+                <div v-if="msg.reactions && msg.reactions.length > 0"
+                     :class="['flex flex-wrap gap-1 mt-1', msg.userId === auth.user?.id ? 'justify-end' : 'justify-start']">
+                  <button v-for="r in msg.reactions" :key="r.emoji"
+                          @click="chat.addReaction(msg.id, r.emoji)"
+                          :class="['flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all active:scale-90 border',
+                            r.userIds.some(id => id.toLowerCase() === auth.user?.id?.toLowerCase())
+                              ? 'bg-purple-100 dark:bg-purple-600/30 border-purple-400 text-purple-700 dark:text-purple-300'
+                              : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300']">
+                    <span>{{ r.emoji }}</span>
+                    <span class="font-bold">{{ r.count }}</span>
+                  </button>
+                </div>
+
+              </div>
             </div>
           </div>
         </template>
@@ -657,8 +739,18 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         <div ref="messagesEnd"></div>
       </div>
 
+      <!-- Кнопка "вниз" -->
+      <Transition name="fade">
+        <button v-if="showScrollButton" @click="scrollToBottomSmooth"
+                class="absolute bottom-20 right-4 z-20 w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white shadow-lg flex items-center justify-center transition-all active:scale-90">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </button>
+      </Transition>
+
       <!-- Футер -->
-      <footer class="p-3 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 z-10 shrink-0">
+      <footer class="p-3 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 z-10 shrink-0 relative">
         <Transition name="picker">
           <div v-if="isStickerPickerOpen" class="mb-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-2xl" @click.stop>
             <div class="flex h-64">
@@ -740,6 +832,25 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </Transition>
 
         <div class="flex items-end gap-2 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 p-1.5 rounded-2xl focus-within:border-purple-500/50 transition-all">
+
+          <!-- Превью ответа -->
+          <Transition name="picker">
+            <div v-if="chat.replyingTo" class="absolute bottom-full left-0 right-0 mb-1 mx-3">
+              <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-lg">
+                <div class="w-0.5 h-8 bg-purple-500 rounded-full shrink-0"></div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-bold text-purple-500">{{ chat.replyingTo.username }}</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 truncate">{{ chat.replyingTo.type === 'Text' || !chat.replyingTo.type ? chat.replyingTo.content : chat.replyingTo.type === 'Image' ? '🖼️ Изображение' : chat.replyingTo.type === 'Video' ? '📹 Видео' : '🎭 Стикер' }}</p>
+                </div>
+                <button @click="chat.setReply(null)" class="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-all">
+                  <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </Transition>
+
           <button @click="triggerAttachmentInput" :disabled="!chat.activeChat || uploadingAttachment"
                   :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
                     !chat.activeChat ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400']">
@@ -950,6 +1061,48 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ===== КОНТЕКСТНОЕ МЕНЮ ===== -->
+    <Transition name="fade">
+      <div v-if="contextMenu" class="fixed inset-0 z-50" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu">
+        <div :style="{ position: 'fixed', left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden w-40"
+             @click.stop>
+          <button @click="onReplyFromMenu"
+                  class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700">
+            <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 17l-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Ответить
+          </button>
+          <button @click="onReactFromMenu"
+                  class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
+            <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="9" stroke-linecap="round"/>
+              <circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/>
+              <circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/>
+              <path d="M8 14c1 2 7 2 8 0" stroke-linecap="round"/>
+            </svg>
+            Реакция
+          </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ===== ПИКЕР РЕАКЦИЙ ===== -->
+    <Transition name="fade">
+      <div v-if="reactionPicker" class="fixed inset-0 z-50" @click="closeContextMenu">
+        <div :style="{ position: 'fixed', left: reactionPicker.x + 'px', top: reactionPicker.y + 'px' }"
+             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-2 flex gap-1"
+             @click.stop>
+          <button v-for="emoji in quickReactions" :key="emoji"
+                  @click="sendReaction(emoji)"
+                  class="w-10 h-10 flex items-center justify-center rounded-xl text-xl hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-90 transition-all">
+            {{ emoji }}
+          </button>
         </div>
       </div>
     </Transition>

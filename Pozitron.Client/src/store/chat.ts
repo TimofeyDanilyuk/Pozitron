@@ -3,6 +3,12 @@ import api from '../api';
 import * as signalR from '@microsoft/signalr';
 import { useAuthStore } from './auth';
 
+export interface Reaction {
+  emoji: string;
+  count: number;
+  userIds: string[];
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -16,6 +22,10 @@ export interface Message {
   avatarUrl?: string;
   emojiPrefix?: string;
   isRead?: boolean;
+  replyToMessageId?: string;
+  replyToContent?: string;
+  replyToUsername?: string;
+  reactions: Reaction[];
 }
 
 export interface Chat {
@@ -52,6 +62,7 @@ export const useChatStore = defineStore('chat', {
     allUsers: [] as any[],
     stickerPacks: [] as StickerPack[],
     stickerPacksLoaded: false,
+    replyingTo: null as Message | null,
   }),
 
   getters: {
@@ -74,7 +85,10 @@ export const useChatStore = defineStore('chat', {
       this.connection.on('ReceiveMessage', (msg: Message) => {
         if (!this.messages[msg.chatId]) this.messages[msg.chatId] = [];
         const already = this.messages[msg.chatId]!.find(m => m.id === msg.id);
-        if (!already) this.messages[msg.chatId]!.push(msg);
+        if (!already) {
+          if (!msg.reactions) msg.reactions = [];
+          this.messages[msg.chatId]!.push(msg);
+        }
         const chat = this.chats.find(c => c.id === msg.chatId);
         if (chat) chat.lastMessage = msg.type === 'Sticker' ? '🎭 Стикер' : msg.content;
       });
@@ -114,6 +128,16 @@ export const useChatStore = defineStore('chat', {
               m.isRead = true;
             }
           });
+        }
+      });
+
+      this.connection.on('ReactionUpdated', ({ messageId, reactions }: { messageId: string, reactions: Reaction[] }) => {
+        for (const msgs of Object.values(this.messages)) {
+          const msg = msgs.find(m => m.id.toLowerCase() === messageId.toLowerCase());
+          if (msg) {
+            msg.reactions = reactions;
+            break;
+          }
         }
       });
 
@@ -163,8 +187,8 @@ export const useChatStore = defineStore('chat', {
       if (this.activeChat?.id === chat.id) return;
       this.activeChat = chat;
       chat.unreadCount = 0;
+      this.replyingTo = null;
       await this.connection?.invoke('JoinChat', chat.id);
-      // Сначала загружаем сообщения, потом помечаем прочитанными
       if (!this.messages[chat.id]) {
         const { data } = await api.get(`/chat/${chat.id}/messages`);
         this.messages[chat.id] = data;
@@ -174,12 +198,22 @@ export const useChatStore = defineStore('chat', {
 
     async sendMessage(content: string) {
       if (!this.activeChat || !content.trim()) return;
-      await this.connection?.invoke('SendMessage', this.activeChat.id, content);
+      const replyId = this.replyingTo?.id ?? null;
+      await this.connection?.invoke('SendMessage', this.activeChat.id, content, replyId);
+      this.replyingTo = null;
     },
 
     async sendSticker(stickerId: string) {
       if (!this.activeChat) return;
       await this.connection?.invoke('SendSticker', this.activeChat.id, stickerId);
+    },
+
+    setReply(message: Message | null) {
+      this.replyingTo = message;
+    },
+
+    async addReaction(messageId: string, emoji: string) {
+      await this.connection?.invoke('AddReaction', messageId, emoji);
     },
 
     // ===== КОНТАКТЫ =====
@@ -259,14 +293,17 @@ export const useChatStore = defineStore('chat', {
       if (chat) await this.openChat(chat);
     },
 
-    // ==== Файлы ====
     async uploadAttachment(file: File) {
       if (!this.activeChat) return;
       const formData = new FormData();
       formData.append('file', file);
+      if (this.replyingTo) {
+        formData.append('replyToMessageId', this.replyingTo.id);
+      }
       await api.post(`/chat/${this.activeChat.id}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
+      this.replyingTo = null;
     },
   }
 });

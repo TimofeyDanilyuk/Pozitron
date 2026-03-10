@@ -23,7 +23,6 @@ public class ChatHub : Hub
         {
             OnlineUsers[userId] = Context.ConnectionId;
             await Clients.All.SendAsync("UserOnline", userId);
-            // Отправляем новому клиенту список онлайн
             await Clients.Caller.SendAsync("OnlineUsers", OnlineUsers.Keys.ToList());
         }
         await base.OnConnectedAsync();
@@ -50,11 +49,34 @@ public class ChatHub : Hub
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, chatId);
     }
 
-    public async Task SendMessage(string chatId, string content)
+    public async Task SendMessage(string chatId, string content, string? replyToMessageId = null)
     {
         var userId = Guid.Parse(Context.User!.FindFirst(ClaimTypes.NameIdentifier)!.Value);
         var user = await _context.Users.FindAsync(userId);
         if (user == null) return;
+
+        string? replyToContent = null;
+        string? replyToUsername = null;
+        Guid? replyToId = null;
+
+        if (replyToMessageId != null && Guid.TryParse(replyToMessageId, out var replyGuid))
+        {
+            var replyMsg = await _context.Messages
+                .Include(m => m.User)
+                .FirstOrDefaultAsync(m => m.Id == replyGuid);
+
+            if (replyMsg != null)
+            {
+                replyToId = replyMsg.Id;
+                replyToContent = replyMsg.Type == MessageType.Text
+                    ? replyMsg.Content
+                    : replyMsg.Type == MessageType.Image ? "🖼️ Изображение"
+                    : replyMsg.Type == MessageType.Video ? "📹 Видео"
+                    : replyMsg.Type == MessageType.Sticker ? "🎭 Стикер"
+                    : replyMsg.Content;
+                replyToUsername = replyMsg.User?.Username;
+            }
+        }
 
         var message = new Message
         {
@@ -62,12 +84,14 @@ public class ChatHub : Hub
             ChatId = Guid.Parse(chatId),
             UserId = userId,
             Content = content,
-            SentAt = DateTime.UtcNow
+            SentAt = DateTime.UtcNow,
+            ReplyToMessageId = replyToId,
+            ReplyToContent = replyToContent,
+            ReplyToUsername = replyToUsername
         };
 
         _context.Messages.Add(message);
 
-        // Инкрементируем счётчик всем участникам кроме отправителя
         var members = await _context.ChatMembers
             .Where(cm => cm.ChatId == Guid.Parse(chatId) && cm.UserId != userId)
             .ToListAsync();
@@ -87,7 +111,10 @@ public class ChatHub : Hub
             username = user.Username,
             avatarUrl = user.AvatarUrl,
             emojiPrefix = user.EmojiPrefix,
-            isRead = false
+            isRead = false,
+            replyToMessageId = replyToId,
+            replyToContent,
+            replyToUsername
         });
 
         foreach (var member in members)
@@ -119,8 +146,8 @@ public class ChatHub : Hub
             Id = Guid.NewGuid(),
             ChatId = Guid.Parse(chatId),
             UserId = userId,
-            Content = stickerId,         // id стикера
-            AttachmentUrl = sticker.Url, // url картинки
+            Content = stickerId,
+            AttachmentUrl = sticker.Url,
             Type = MessageType.Sticker,
             SentAt = DateTime.UtcNow,
         };
@@ -142,6 +169,59 @@ public class ChatHub : Hub
             emojiPrefix = user.EmojiPrefix,
             packId = sticker.PackId,
             isRead = false
+        });
+    }
+
+    public async Task AddReaction(string messageId, string emoji)
+    {
+        var userId = Guid.Parse(Context.User!.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        var msgGuid = Guid.Parse(messageId);
+
+        // Если уже такая же реакция — удаляем (toggle)
+        var existing = await _context.MessageReactions
+            .FirstOrDefaultAsync(r => r.MessageId == msgGuid && r.UserId == userId && r.Emoji == emoji);
+
+        string action;
+        if (existing != null)
+        {
+            _context.MessageReactions.Remove(existing);
+            action = "removed";
+        }
+        else
+        {
+            // Убираем любую другую реакцию этого пользователя на это сообщение
+            var other = await _context.MessageReactions
+                .FirstOrDefaultAsync(r => r.MessageId == msgGuid && r.UserId == userId);
+            if (other != null)
+                _context.MessageReactions.Remove(other);
+
+            _context.MessageReactions.Add(new MessageReaction
+            {
+                Id = Guid.NewGuid(),
+                MessageId = msgGuid,
+                UserId = userId,
+                Emoji = emoji
+            });
+            action = "added";
+        }
+
+        await _context.SaveChangesAsync();
+
+        // Получаем актуальные реакции
+        var reactions = await _context.MessageReactions
+            .Where(r => r.MessageId == msgGuid)
+            .GroupBy(r => r.Emoji)
+            .Select(g => new { emoji = g.Key, count = g.Count(), userIds = g.Select(r => r.UserId).ToList() })
+            .ToListAsync();
+
+        // Получаем chatId сообщения
+        var msg = await _context.Messages.FindAsync(msgGuid);
+        if (msg == null) return;
+
+        await Clients.Group(msg.ChatId.ToString()).SendAsync("ReactionUpdated", new
+        {
+            messageId,
+            reactions
         });
     }
 }

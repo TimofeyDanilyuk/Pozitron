@@ -19,6 +19,7 @@ namespace Pozitron.Api.Data
         public DbSet<Sticker> Stickers => Set<Sticker>();
         public DbSet<UserStickerPack> UserStickerPacks => Set<UserStickerPack>();
         public DbSet<UserContact> UserContacts => Set<UserContact>();
+        public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -56,7 +57,7 @@ namespace Pozitron.Api.Data
                 .HasOne(uc => uc.Contact)
                 .WithMany()
                 .HasForeignKey(uc => uc.ContactId)
-                .OnDelete(DeleteBehavior.Restrict);    
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

@@ -26,13 +26,11 @@ public class ChatController : ControllerBase
     private Guid CurrentUserId =>
         Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-    // Получить все чаты текущего пользователя + общий канал
     [HttpGet]
     public async Task<IActionResult> GetChats()
     {
         var userId = CurrentUserId;
 
-        // Общий канал
         var general = await _context.ChatMembers
             .Where(cm => cm.UserId == userId && cm.Chat!.Type == ChatType.General)
             .Select(cm => new ChatDto
@@ -48,7 +46,6 @@ public class ChatController : ControllerBase
             })
             .ToListAsync();
 
-        // DM чаты пользователя
         var dms = await _context.ChatMembers
             .Where(cm => cm.UserId == userId && cm.Chat!.Type == ChatType.Direct)
             .Include(cm => cm.Chat)
@@ -82,7 +79,6 @@ public class ChatController : ControllerBase
         return Ok(general.Concat(dms));
     }
 
-    // История сообщений чата
     [HttpGet("{chatId}/messages")]
     public async Task<IActionResult> GetMessages(Guid chatId, [FromQuery] int skip = 0, [FromQuery] int take = 50)
     {
@@ -92,6 +88,7 @@ public class ChatController : ControllerBase
             .Skip(skip)
             .Take(take)
             .Include(m => m.User)
+            .Include(m => m.Reactions)
             .Select(m => new MessageDto
             {
                 Id = m.Id,
@@ -109,14 +106,25 @@ public class ChatController : ControllerBase
                 Username = m.User!.Username,
                 AvatarUrl = m.User.AvatarUrl,
                 EmojiPrefix = m.User.EmojiPrefix,
-                IsRead = m.IsRead
+                IsRead = m.IsRead,
+                ReplyToMessageId = m.ReplyToMessageId,
+                ReplyToContent = m.ReplyToContent,
+                ReplyToUsername = m.ReplyToUsername,
+                Reactions = m.Reactions
+                    .GroupBy(r => r.Emoji)
+                    .Select(g => new ReactionDto
+                    {
+                        Emoji = g.Key,
+                        Count = g.Count(),
+                        UserIds = g.Select(r => r.UserId).ToList()
+                    })
+                    .ToList()
             })
             .ToListAsync();
 
         return Ok(messages.OrderBy(m => m.SentAt));
     }
 
-    // Создать или открыть DM с пользователем
     [HttpPost("dm/{targetUserId}")]
     public async Task<IActionResult> GetOrCreateDm(Guid targetUserId)
     {
@@ -137,7 +145,6 @@ public class ChatController : ControllerBase
         if (targetChats != null)
             return Ok(new { id = targetChats.Id });
 
-        // Создаём новый 
         var chat = new Chat { Id = Guid.NewGuid(), Type = ChatType.Direct };
         chat.Members.Add(new ChatMember { ChatId = chat.Id, UserId = userId });
         chat.Members.Add(new ChatMember { ChatId = chat.Id, UserId = targetUserId });
@@ -145,11 +152,9 @@ public class ChatController : ControllerBase
         _context.Chats.Add(chat);
         await _context.SaveChangesAsync();
 
-        // Получаем данные обоих пользователей для уведомления
         var currentUser = await _context.Users.FindAsync(userId);
         var targetUser = await _context.Users.FindAsync(targetUserId);
 
-        // Уведомляем второго пользователя что у него новый DM
         var targetUserIdStr = targetUserId.ToString();
         if (ChatHub.OnlineUsers.TryGetValue(targetUserIdStr, out var targetConnectionId))
         {
@@ -163,7 +168,6 @@ public class ChatController : ControllerBase
             });
         }
 
-        // Уведомляем и самого инициатора (на случай нескольких вкладок)
         var currentUserIdStr = userId.ToString();
         if (ChatHub.OnlineUsers.TryGetValue(currentUserIdStr, out var currentConnectionId))
         {
@@ -180,7 +184,6 @@ public class ChatController : ControllerBase
         return Ok(new { id = chat.Id });
     }
 
-    // Список всех пользователей для поиска
     [HttpGet("users")]
     public async Task<IActionResult> GetUsers([FromQuery] string? search)
     {
@@ -217,7 +220,6 @@ public class ChatController : ControllerBase
 
         await _context.SaveChangesAsync();
 
-        // Уведомляем отправителей если они онлайн
         var senderIds = unreadMessages.Select(m => m.UserId.ToString()).Distinct().ToList();
         foreach (var senderId in senderIds)
         {
@@ -225,7 +227,6 @@ public class ChatController : ControllerBase
                 await _hub.Clients.Client(connId).SendAsync("MessagesRead", new { chatId = chatId.ToString() });
         }
 
-        // Для общего чата — уведомляем всех онлайн пользователей в группе
         var chat = await _context.Chats.FindAsync(chatId);
         if (chat?.Type == ChatType.General)
         {
@@ -236,13 +237,12 @@ public class ChatController : ControllerBase
     }
 
     [HttpPost("{chatId}/upload")]
-    public async Task<IActionResult> UploadAttachment(Guid chatId, IFormFile file)
+    public async Task<IActionResult> UploadAttachment(Guid chatId, IFormFile file, [FromForm] string? replyToMessageId = null)
     {
         var userId = CurrentUserId;
         var user = await _context.Users.FindAsync(userId);
         if (user == null) return Unauthorized();
 
-        // Проверка типа
         var allowedTypes = new[] { "image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm" };
         if (!allowedTypes.Contains(file.ContentType.ToLower()))
             return BadRequest("Разрешены только изображения и видео");
@@ -267,6 +267,29 @@ public class ChatController : ControllerBase
         var isVideo = file.ContentType.ToLower().StartsWith("video/");
         var messageType = isVideo ? MessageType.Video : MessageType.Image;
 
+        string? replyToContent = null;
+        string? replyToUsername = null;
+        Guid? replyToId = null;
+
+        if (replyToMessageId != null && Guid.TryParse(replyToMessageId, out var replyGuid))
+        {
+            var replyMsg = await _context.Messages
+                .Include(m => m.User)
+                .FirstOrDefaultAsync(m => m.Id == replyGuid);
+
+            if (replyMsg != null)
+            {
+                replyToId = replyMsg.Id;
+                replyToContent = replyMsg.Type == MessageType.Text
+                    ? replyMsg.Content
+                    : replyMsg.Type == MessageType.Image ? "🖼️ Изображение"
+                    : replyMsg.Type == MessageType.Video ? "📹 Видео"
+                    : replyMsg.Type == MessageType.Sticker ? "🎭 Стикер"
+                    : replyMsg.Content;
+                replyToUsername = replyMsg.User?.Username;
+            }
+        }
+
         var message = new Message
         {
             Id = Guid.NewGuid(),
@@ -275,7 +298,10 @@ public class ChatController : ControllerBase
             Content = isVideo ? "📹 Видео" : "🖼️ Изображение",
             AttachmentUrl = attachmentUrl,
             Type = messageType,
-            SentAt = DateTime.UtcNow
+            SentAt = DateTime.UtcNow,
+            ReplyToMessageId = replyToId,
+            ReplyToContent = replyToContent,
+            ReplyToUsername = replyToUsername
         };
 
         _context.Messages.Add(message);
@@ -301,7 +327,10 @@ public class ChatController : ControllerBase
             username = user.Username,
             avatarUrl = user.AvatarUrl,
             emojiPrefix = user.EmojiPrefix,
-            isRead = false
+            isRead = false,
+            replyToMessageId = replyToId,
+            replyToContent,
+            replyToUsername
         });
 
         foreach (var member in members)
@@ -333,6 +362,13 @@ public record ChatDto
     public bool IsContact { get; set; }
 }
 
+public record ReactionDto
+{
+    public string Emoji { get; set; } = "";
+    public int Count { get; set; }
+    public List<Guid> UserIds { get; set; } = new();
+}
+
 public record MessageDto
 {
     public Guid Id { get; set; }
@@ -346,4 +382,8 @@ public record MessageDto
     public string? AvatarUrl { get; set; }
     public string? EmojiPrefix { get; set; }
     public bool IsRead { get; set; }
+    public Guid? ReplyToMessageId { get; set; }
+    public string? ReplyToContent { get; set; }
+    public string? ReplyToUsername { get; set; }
+    public List<ReactionDto> Reactions { get; set; } = new();
 }
