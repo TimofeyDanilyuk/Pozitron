@@ -631,7 +631,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                 </span>
               </div>
 
-              <!-- Обычное сообщение -->
+              <!-- Обычное сообщени -->
               <div v-else :class="[
                 'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed',
                 msg.userId === auth.user?.id
