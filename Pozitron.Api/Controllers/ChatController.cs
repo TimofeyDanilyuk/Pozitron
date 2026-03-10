@@ -14,11 +14,13 @@ public class ChatController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IHubContext<ChatHub> _hub;
+    private readonly IWebHostEnvironment _environment;
 
-    public ChatController(AppDbContext context, IHubContext<ChatHub> hub)
+    public ChatController(AppDbContext context, IHubContext<ChatHub> hub, IWebHostEnvironment environment)
     {
         _context = context;
         _hub = hub;
+        _environment = environment;
     }
 
     private Guid CurrentUserId =>
@@ -231,6 +233,92 @@ public class ChatController : ControllerBase
         }
 
         return Ok();
+    }
+
+    [HttpPost("{chatId}/upload")]
+    public async Task<IActionResult> UploadAttachment(Guid chatId, IFormFile file)
+    {
+        var userId = CurrentUserId;
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return Unauthorized();
+
+        // Проверка типа
+        var allowedTypes = new[] { "image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm" };
+        if (!allowedTypes.Contains(file.ContentType.ToLower()))
+            return BadRequest("Разрешены только изображения и видео");
+
+        if (file.Length > 50 * 1024 * 1024)
+            return BadRequest("Файл слишком большой (макс. 50MB)");
+
+        var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var folderPath = Path.Combine(rootPath, "uploads", "attachments", chatId.ToString());
+        if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+
+        var extension = Path.GetExtension(file.FileName).ToLower();
+        var fileName = $"{Guid.NewGuid()}{extension}";
+        var filePath = Path.Combine(folderPath, fileName);
+
+        using (var stream = new FileStream(filePath, FileMode.Create))
+            await file.CopyToAsync(stream);
+
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var attachmentUrl = $"{baseUrl}/uploads/attachments/{chatId}/{fileName}";
+
+        var isVideo = file.ContentType.ToLower().StartsWith("video/");
+        var messageType = isVideo ? MessageType.Video : MessageType.Image;
+
+        var message = new Message
+        {
+            Id = Guid.NewGuid(),
+            ChatId = chatId,
+            UserId = userId,
+            Content = isVideo ? "📹 Видео" : "🖼️ Изображение",
+            AttachmentUrl = attachmentUrl,
+            Type = messageType,
+            SentAt = DateTime.UtcNow
+        };
+
+        _context.Messages.Add(message);
+
+        var members = await _context.ChatMembers
+            .Where(cm => cm.ChatId == chatId && cm.UserId != userId)
+            .ToListAsync();
+
+        foreach (var member in members)
+            member.UnreadCount++;
+
+        await _context.SaveChangesAsync();
+
+        await _hub.Clients.Group(chatId.ToString()).SendAsync("ReceiveMessage", new
+        {
+            id = message.Id,
+            chatId = chatId.ToString(),
+            content = message.Content,
+            attachmentUrl,
+            type = messageType.ToString(),
+            sentAt = message.SentAt,
+            userId = message.UserId,
+            username = user.Username,
+            avatarUrl = user.AvatarUrl,
+            emojiPrefix = user.EmojiPrefix,
+            isRead = false
+        });
+
+        foreach (var member in members)
+        {
+            var memberIdStr = member.UserId.ToString();
+            if (ChatHub.OnlineUsers.TryGetValue(memberIdStr, out var connId))
+            {
+                await _context.Entry(member).ReloadAsync();
+                await _hub.Clients.Client(connId).SendAsync("UnreadUpdated", new
+                {
+                    chatId = chatId.ToString(),
+                    unreadCount = member.UnreadCount
+                });
+            }
+        }
+
+        return Ok(new { message.Id, attachmentUrl, type = messageType.ToString() });
     }
 }
 
