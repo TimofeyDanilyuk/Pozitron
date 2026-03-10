@@ -33,6 +33,26 @@ const uploadingSticker = ref(false);
 const stickerPackModal = ref<null | { id: string, name: string, coverUrl?: string, stickers: any[], isAdded: boolean, createdBy: string }>(null);
 const stickerPackModalLoading = ref(false);
 
+// Загрузка файлов
+const uploadingAttachment = ref(false);
+
+const openImage = (url: string) => window.open(url, '_blank');
+
+const triggerAttachmentInput = () => document.getElementById('attachmentInput')?.click();
+
+const onAttachmentSelected = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (!target.files || !target.files[0]) return;
+  uploadingAttachment.value = true;
+  try {
+    await chat.uploadAttachment(target.files[0]);
+  } catch (e) {
+    alert('Ошибка при загрузке файла');
+  } finally {
+    uploadingAttachment.value = false;
+    target.value = '';
+  }
+};
 
 // Спиннеры
 const chatsLoading = ref(false);
@@ -136,7 +156,6 @@ const toggleSelectUser = (userId: string) => {
   } else {
     selectedUserIds.value.add(userId);
   }
-  // Триггер реактивности
   selectedUserIds.value = new Set(selectedUserIds.value);
 };
 
@@ -377,7 +396,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5">
-                <!-- Иконка контакта -->
                 <svg viewBox="0 0 16 16" class="w-3 h-3 text-purple-400 shrink-0 fill-current">
                   <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1a5 5 0 0 0-5 5h10a5 5 0 0 0-5-5z"/>
                 </svg>
@@ -429,9 +447,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </template>
       </div>
 
-      <!-- Футер сайдбара: кнопка контактов + поиск -->
+      <!-- Футер сайдбара -->
       <div class="p-4 border-t border-slate-800 shrink-0 space-y-2">
-        <!-- Кнопка добавить контакты -->
         <button @click="openAddContacts"
                 class="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-600/10 border border-purple-500/20 hover:bg-purple-600/20 transition-all active:scale-95 text-purple-400 text-sm font-bold">
           <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current shrink-0">
@@ -439,8 +456,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </svg>
           Добавить контакты...
         </button>
-
-        <!-- Поиск пользователей для DM -->
         <div class="relative">
           <input v-model="searchQuery" @input="onSearch" type="text" placeholder="Найти пользователя..."
                  class="w-full bg-slate-900/50 border border-slate-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-purple-500/50 transition-all select-text">
@@ -478,7 +493,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <p class="font-bold text-sm" :class="chat.activeChat.isContact ? 'text-purple-300' : ''">
                 {{ chat.activeChat.name || 'Чат' }}
               </p>
-              <!-- Иконка контакта в шапке -->
               <svg v-if="chat.activeChat.isContact" viewBox="0 0 16 16" class="w-3.5 h-3.5 text-purple-400 fill-current">
                 <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1a5 5 0 0 0-5 5h10a5 5 0 0 0-5-5z"/>
               </svg>
@@ -521,7 +535,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </div>
 
           <div v-for="msg in currentMessages" :key="msg.id"
-              :class="['flex gap-2 items-end', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+               :class="['flex gap-2 items-end', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
             <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
             <div v-else class="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mb-5">
               {{ msg.username?.[0]?.toUpperCase() }}
@@ -532,9 +546,40 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
               <!-- Стикер -->
               <div v-if="msg.type === 'Sticker' && msg.attachmentUrl"
-                  @click="msg.packId && onStickerClick(msg.packId)"
-                  class="cursor-pointer active:scale-95 transition-transform relative">
+                   @click="msg.packId && onStickerClick(msg.packId)"
+                   class="cursor-pointer active:scale-95 transition-transform relative">
                 <img :src="msg.attachmentUrl" class="w-32 h-32 object-contain rounded-2xl" draggable="false" oncontextmenu="return false">
+                <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
+                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
+                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
+                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+              </div>
+
+              <!-- Изображение -->
+              <div v-else-if="msg.type === 'Image' && msg.attachmentUrl" class="relative">
+                <img :src="msg.attachmentUrl"
+                     class="max-w-xs rounded-2xl object-cover cursor-pointer"
+                     draggable="false" oncontextmenu="return false"
+                     @click="openImage(msg.attachmentUrl!)">
+                <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
+                  <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
+                    <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2">
+                    <path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </span>
+              </div>
+
+              <!-- Видео -->
+              <div v-else-if="msg.type === 'Video' && msg.attachmentUrl" class="relative">
+                <video :src="msg.attachmentUrl" controls class="max-w-xs rounded-2xl"></video>
                 <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
                   <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2">
                     <path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -564,6 +609,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                   </svg>
                 </span>
               </div>
+
             </div>
           </div>
         </template>
@@ -654,14 +700,24 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </Transition>
 
         <div class="flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 p-1.5 rounded-2xl focus-within:border-purple-500/50 transition-all">
-          <button class="p-2 hover:bg-slate-700 rounded-xl transition-colors text-slate-400 shrink-0 self-end mb-0.5">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <!-- Кнопка скрепки с индикатором загрузки -->
+          <button @click="triggerAttachmentInput" :disabled="!chat.activeChat || uploadingAttachment"
+                  :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+                    !chat.activeChat ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-700 text-slate-400']">
+            <div v-if="uploadingAttachment" class="w-6 h-6 flex items-center justify-center">
+              <div class="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
               <defs><linearGradient id="ga" x1="0" y1="0" x2="24" y2="24">
               <stop offset="0%" stop-color="#7C5CFF"/><stop offset="100%" stop-color="#37C8FF"/></linearGradient></defs>
               <path d="M21 11.5L12.5 20C10.3 22.2 6.7 22.2 4.5 20C2.3 17.8 2.3 14.2 4.5 12L13 3.5C14.4 2.1 16.6 2.1 18 3.5C19.4 4.9 19.4 7.1 18 8.5L9.5 17C8.8 17.7 7.7 17.7 7 17C6.3 16.3 6.3 15.2 7 14.5L14.5 7"
               stroke="url(#ga)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
+          <input id="attachmentInput" type="file" class="hidden"
+                 accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm"
+                 @change="onAttachmentSelected">
+
           <button @click.stop="toggleStickerPicker" :disabled="!chat.activeChat"
                   :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
                     isStickerPickerOpen ? 'bg-purple-600/30 text-purple-300' : 'hover:bg-slate-700 text-slate-400',
@@ -701,19 +757,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       <div v-if="isAddContactsOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
         <div @click="isAddContactsOpen = false" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
         <div class="relative bg-slate-900 border border-white/10 w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
-          <!-- Шапка -->
           <div class="p-5 border-b border-slate-800">
             <p class="font-black text-lg">Добавить контакты</p>
             <p class="text-xs text-slate-500 mt-0.5">Выбери пользователей</p>
           </div>
-
-          <!-- Поиск -->
           <div class="px-4 pt-3">
             <input v-model="contactSearch" type="text" placeholder="Поиск..."
                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-purple-500 select-text">
           </div>
-
-          <!-- Список пользователей -->
           <div class="max-h-64 overflow-y-auto p-2 mt-2">
             <div v-if="chat.allUsers.length === 0" class="flex items-center justify-center py-8 opacity-30">
               <p class="text-sm">Загрузка...</p>
@@ -721,12 +772,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <div v-for="user in filteredAllUsers" :key="user.id"
                  @click="toggleSelectUser(user.id)"
                  class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all hover:bg-slate-800 active:bg-slate-700">
-              <!-- Аватар -->
               <img v-if="user.avatarUrl" :src="user.avatarUrl" class="w-10 h-10 rounded-xl object-cover shrink-0">
               <div v-else class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-sm font-bold shrink-0">
                 {{ user.username?.[0]?.toUpperCase() }}
               </div>
-              <!-- Имя -->
               <div class="flex-1 min-w-0">
                 <p class="text-sm font-bold truncate">{{ user.emojiPrefix || '' }} {{ user.username }}</p>
                 <div class="flex items-center gap-1 mt-0.5">
@@ -734,19 +783,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                   <p class="text-xs text-slate-500">{{ isOnline(user.id) ? 'онлайн' : 'оффлайн' }}</p>
                 </div>
               </div>
-              <!-- Чекбокс -->
               <div :class="['w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0',
-                selectedUserIds.has(user.id)
-                  ? 'bg-purple-600 border-purple-600'
-                  : 'border-slate-600']">
+                selectedUserIds.has(user.id) ? 'bg-purple-600 border-purple-600' : 'border-slate-600']">
                 <svg v-if="selectedUserIds.has(user.id)" viewBox="0 0 16 16" class="w-3.5 h-3.5 fill-white">
                   <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
                 </svg>
               </div>
             </div>
           </div>
-
-          <!-- Кнопки -->
           <div class="p-4 border-t border-slate-800 flex gap-3">
             <button @click="isAddContactsOpen = false"
                     class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-sm transition-all active:scale-95">

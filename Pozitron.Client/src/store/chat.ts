@@ -257,6 +257,16 @@ export const useChatStore = defineStore('chat', {
       await this.loadChats();
       const chat = this.chats.find(c => c.id === data.id);
       if (chat) await this.openChat(chat);
-    }
+    },
+
+    // ==== Файлы ====
+    async uploadAttachment(file: File) {
+      if (!this.activeChat) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.post(`/chat/${this.activeChat.id}/upload`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    },
   }
 });
