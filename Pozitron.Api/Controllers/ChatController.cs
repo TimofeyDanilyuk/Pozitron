@@ -48,9 +48,9 @@ public class ChatController : ControllerBase
 
         // DM чаты пользователя
         var dms = await _context.ChatMembers
-            .Where(cm => cm.UserId == userId)
+            .Where(cm => cm.UserId == userId && cm.Chat!.Type == ChatType.Direct)
             .Include(cm => cm.Chat)
-                .ThenInclude(c => c.Members)
+                .ThenInclude(c => c!.Members)
                     .ThenInclude(m => m.User)
             .Select(cm => new ChatDto
             {
