@@ -15,7 +15,7 @@ const blobCache = new Map<string, string>();
 const fetchFileAsBlob = async (url: string): Promise<string> => {
   if (blobCache.has(url)) return blobCache.get(url)!;
   try {
-    const path = new URL(url).pathname;
+    const path = new URL(url).pathname.replace('/api', '');
     const response = await api.get(path, { responseType: 'blob' });
     const blobUrl = URL.createObjectURL(response.data);
     blobCache.set(url, blobUrl);
