@@ -267,7 +267,8 @@ public class ChatController : ControllerBase
             await file.CopyToAsync(stream);
 
         // Теперь URL ведёт через авторизованный эндпоинт
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var scheme = Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme;
+        var baseUrl = $"{scheme}://{Request.Host}";
         var attachmentUrl = $"{baseUrl}/api/files/{chatId}/{fileName}";
 
         var isVideo = file.ContentType.ToLower().StartsWith("video/");
