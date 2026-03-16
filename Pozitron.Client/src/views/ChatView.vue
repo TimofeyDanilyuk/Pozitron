@@ -240,34 +240,53 @@ const formatAudioTime = (seconds: number): string => {
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
 
-const startRecording = async () => {
+const toggleRecording = async () => {
   if (!chat.activeChat) return;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      const blob = new Blob(audioChunks, { type: 'audio/webm' });
-      const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
-      stream.getTracks().forEach(t => t.stop());
-      uploadingAttachment.value = true;
-      try {
-        await chat.uploadAttachment(file);
-      } finally {
-        uploadingAttachment.value = false;
-      }
-    };
-    mediaRecorder.start();
-    isRecording.value = true;
-  } catch {
-    alert('Нет доступа к микрофону');
-  }
-};
 
-const stopRecording = () => {
-  mediaRecorder?.stop();
-  isRecording.value = false;
+  if (isRecording.value) {
+    // Останавливаем запись
+    mediaRecorder?.stop();
+    isRecording.value = false;
+  } else {
+    // Начинаем запись
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunks = [];
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/ogg';
+
+      mediaRecorder = new MediaRecorder(stream, { mimeType });
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (audioChunks.length === 0) return;
+        const blob = new Blob(audioChunks, { type: mimeType });
+        if (blob.size < 1000) return; // игнорируем слишком короткие
+        const ext = mimeType.includes('ogg') ? 'ogg' : 'webm';
+        const file = new File([blob], `voice_${Date.now()}.${ext}`, { type: mimeType });
+        uploadingAttachment.value = true;
+        try {
+          await chat.uploadAttachment(file);
+        } finally {
+          uploadingAttachment.value = false;
+        }
+      };
+
+      // timeslice 100ms — данные пишутся каждые 100мс, не только в конце
+      mediaRecorder.start(100);
+      isRecording.value = true;
+    } catch {
+      alert('Нет доступа к микрофону');
+    }
+  }
 };
 
 // Спиннеры
@@ -1078,15 +1097,17 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
           <!-- Кнопка микрофона — показывается когда инпут пустой -->
           <button v-if="!messageInput.trim() && chat.activeChat"
-                  @mousedown="startRecording" @mouseup="stopRecording"
-                  @touchstart.prevent="startRecording" @touchend.prevent="stopRecording"
-                  :class="['px-3 py-2.5 rounded-xl shadow-lg transition-all shrink-0 self-end',
+                  @click="toggleRecording"
+                  :class="['px-3 py-2.5 rounded-xl shadow-lg transition-all shrink-0 self-end active:scale-95',
                     isRecording
-                      ? 'bg-red-500 animate-pulse scale-110'
+                      ? 'bg-red-500 animate-pulse'
                       : 'bg-gradient-to-r from-purple-600 to-indigo-600']">
-            <svg viewBox="0 0 24 24" class="w-6 h-6 fill-white">
+            <svg v-if="!isRecording" viewBox="0 0 24 24" class="w-6 h-6 fill-white">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
               <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h-3v2h8v-2h-3v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" class="w-6 h-6 fill-white">
+              <rect x="6" y="6" width="12" height="12" rx="2"/>
             </svg>
           </button>
         </div>
