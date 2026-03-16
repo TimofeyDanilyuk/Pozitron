@@ -29,6 +29,14 @@ const onMessagesScroll = () => {
 const scrollToBottomSmooth = () => {
   messagesEnd.value?.scrollIntoView({ behavior: 'smooth' });
 };
+
+const scrollToMessage = (msgId: string) => {
+  const el = document.getElementById(`msg-${msgId}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('highlight-message');
+  setTimeout(() => el.classList.remove('highlight-message'), 1500);
+};
 const isEmojiPickerOpen = ref(false);
 const emojiSearch = ref('');
 const isChatEmojiPickerOpen = ref(false);
@@ -51,24 +59,11 @@ const onMessageLongPressCancel = () => {
 
 const showContextMenu = (event: TouchEvent | MouseEvent, msg: any) => {
   event.preventDefault();
-
-  let clientX = 0;
-  let clientY = 0;
-
-  if (event instanceof TouchEvent) {
-    const touch = event.changedTouches[0];
-    if (!touch) return;
-
-    clientX = touch.clientX;
-    clientY = touch.clientY;
-  } else {
-    clientX = event.clientX;
-    clientY = event.clientY;
-  }
-
+  const isTouchEvent = event instanceof TouchEvent;
+  const clientX = isTouchEvent ? (event.changedTouches[0]?.clientX ?? 0) : (event as MouseEvent).clientX;
+  const clientY = isTouchEvent ? (event.changedTouches[0]?.clientY ?? 0) : (event as MouseEvent).clientY;
   const x = Math.min(clientX, window.innerWidth - 168);
   const y = Math.min(clientY, window.innerHeight - 120);
-
   contextMenu.value = { x, y, msg };
   reactionPicker.value = null;
 };
@@ -647,7 +642,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <p class="text-sm italic">Сообщений пока нет. Будь первым!</p>
           </div>
 
-          <div v-for="msg in currentMessages" :key="msg.id"
+          <div v-for="msg in currentMessages" :key="msg.id" :id="`msg-${msg.id}`"
                :class="['flex gap-2 items-end', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
             <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
             <div v-else class="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">
@@ -667,7 +662,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
                 <!-- Превью ответа -->
                 <div v-if="msg.replyToUsername"
-                     :class="['mb-1 px-2 py-1 rounded-xl border-l-2 border-purple-400 text-xs opacity-70 max-w-full',
+                     @click="msg.replyToMessageId && scrollToMessage(msg.replyToMessageId)"
+                     :class="['mb-1 px-2 py-1 rounded-xl border-l-2 border-purple-400 text-xs opacity-70 max-w-full cursor-pointer hover:opacity-100 transition-opacity',
                        msg.userId === auth.user?.id ? 'bg-white/10' : 'bg-slate-300/50 dark:bg-slate-700/50']">
                   <p class="font-bold text-purple-400 truncate">{{ msg.replyToUsername }}</p>
                   <p class="truncate text-slate-600 dark:text-slate-300">{{ msg.replyToContent }}</p>
@@ -1115,4 +1111,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 .picker-enter-active, .picker-leave-active { transition: all 0.15s ease; }
 .picker-enter-from, .picker-leave-to { opacity: 0; transform: translateY(-6px) scale(0.98); }
+
+.highlight-message {
+  animation: highlight 1.5s ease;
+}
+
+@keyframes highlight {
+  0%   { background-color: transparent; }
+  20%  { background-color: rgba(168, 85, 247, 0.25); }
+  100% { background-color: transparent; }
+}
 </style>
