@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useAuthStore } from '../store/auth.ts'; 
 import { useRouter } from 'vue-router';
 import axios from 'axios';
@@ -7,10 +7,8 @@ import axios from 'axios';
 const auth = useAuthStore();
 const router = useRouter();
 
-// Режим: 'login' | 'register' | 'recover'
 const mode = ref<'login' | 'register' | 'recover'>('login');
 
-// Поля формы входа/регистрации
 const username = ref('');
 const password = ref('');
 const confirmPassword = ref('');
@@ -19,11 +17,9 @@ const securityAnswer = ref('');
 const error = ref('');
 const loading = ref(false);
 
-// Видимость паролей
 const showPassword = ref(false);
 const showConfirmPassword = ref(false);
 
-// Восстановление пароля — шаг 1: ввод ника, шаг 2: ответ на вопрос и новый пароль
 const recoverStep = ref<1 | 2>(1);
 const recoverUsername = ref('');
 const recoverQuestion = ref('');
@@ -33,14 +29,61 @@ const recoverConfirmPassword = ref('');
 const showRecoverPassword = ref(false);
 const successMessage = ref('');
 
-// Отправка формы входа/регистрации
+// ===== СЛОЖНОСТЬ ПАРОЛЯ =====
+const calcPasswordScore = (pwd: string): number => {
+  let score = 0;
+  for (const c of pwd) {
+    if (/[a-z]/.test(c)) score += 1;
+    else if (/[A-Z]/.test(c)) score += 2;
+    else if (/[0-9]/.test(c)) score += 2;
+    else score += 3; // спецсимвол
+  }
+  return score;
+};
+
+const passwordScore = computed(() => calcPasswordScore(password.value));
+
+const passwordStrength = computed(() => {
+  const s = passwordScore.value;
+  const len = password.value.length;
+  if (len === 0) return null;
+  if (len < 8 || s < 8)  return { label: 'Очень слабый', color: 'bg-red-500',    width: 'w-1/4',  textColor: 'text-red-500' };
+  if (s < 12)             return { label: 'Слабый',       color: 'bg-orange-500', width: 'w-2/4',  textColor: 'text-orange-500' };
+  if (s < 15)             return { label: 'Средний',      color: 'bg-yellow-500', width: 'w-3/4',  textColor: 'text-yellow-500' };
+  if (s < 22)             return { label: 'Надёжный',     color: 'bg-green-500',  width: 'w-full', textColor: 'text-green-500' };
+  return                         { label: 'Отличный',     color: 'bg-emerald-500',width: 'w-full', textColor: 'text-emerald-500' };
+});
+
+const isPasswordValid = computed(() => password.value.length >= 8 && passwordScore.value >= 15);
+
+const recoverPasswordScore = computed(() => calcPasswordScore(recoverNewPassword.value));
+const recoverPasswordStrength = computed(() => {
+  const s = recoverPasswordScore.value;
+  const len = recoverNewPassword.value.length;
+  if (len === 0) return null;
+  if (len < 8 || s < 8)  return { label: 'Очень слабый', color: 'bg-red-500',    width: 'w-1/4',  textColor: 'text-red-500' };
+  if (s < 12)             return { label: 'Слабый',       color: 'bg-orange-500', width: 'w-2/4',  textColor: 'text-orange-500' };
+  if (s < 15)             return { label: 'Средний',      color: 'bg-yellow-500', width: 'w-3/4',  textColor: 'text-yellow-500' };
+  if (s < 22)             return { label: 'Надёжный',     color: 'bg-green-500',  width: 'w-full', textColor: 'text-green-500' };
+  return                         { label: 'Отличный',     color: 'bg-emerald-500',width: 'w-full', textColor: 'text-emerald-500' };
+});
+
 const handleSubmit = async () => {
   error.value = '';
   successMessage.value = '';
 
   if (mode.value === 'register') {
+    const trimmedUsername = username.value.trim();
+    if (trimmedUsername.length < 4 || trimmedUsername.length > 32) {
+      error.value = 'Ник должен быть от 4 до 32 символов.';
+      return;
+    }
     if (password.value !== confirmPassword.value) {
       error.value = 'Пароли не совпадают';
+      return;
+    }
+    if (!isPasswordValid.value) {
+      error.value = 'Пароль слишком простой. Добавь заглавные буквы, цифры или спецсимволы.';
       return;
     }
     if (!securityQuestion.value.trim() || !securityAnswer.value.trim()) {
@@ -71,7 +114,6 @@ const handleSubmit = async () => {
   }
 };
 
-// Шаг 1 восстановления — получить секретный вопрос по нику
 const handleRecoverStep1 = async () => {
   error.value = '';
   if (!recoverUsername.value.trim()) {
@@ -90,11 +132,14 @@ const handleRecoverStep1 = async () => {
   }
 };
 
-// Шаг 2 восстановления — отправить ответ и новый пароль
 const handleRecoverStep2 = async () => {
   error.value = '';
   if (recoverNewPassword.value !== recoverConfirmPassword.value) {
     error.value = 'Пароли не совпадают';
+    return;
+  }
+  if (recoverPasswordScore.value < 15 || recoverNewPassword.value.length < 8) {
+    error.value = 'Новый пароль слишком простой.';
     return;
   }
   loading.value = true;
@@ -113,7 +158,6 @@ const handleRecoverStep2 = async () => {
   }
 };
 
-// Переключение режима с полным сбросом всех полей
 const setMode = (m: 'login' | 'register' | 'recover') => {
   mode.value = m;
   error.value = '';
@@ -143,7 +187,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
           class="w-95 h-auto object-contain outline-hidden active:outline-hidden focus:outline-hidden">
       </div>
 
-      <!-- Сообщение об успехе -->
+      <!-- Успех -->
       <div v-if="successMessage" class="mb-4 p-3 bg-green-100 border-l-4 border-green-500 text-green-700 text-sm rounded">
         {{ successMessage }}
       </div>
@@ -162,6 +206,8 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
           <input v-model="username" type="text" required
             class="w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 focus:ring-2 focus:ring-purple-500 outline-none transition-all dark:text-white"
             placeholder="Введите никнейм...">
+          <p v-if="mode === 'register' && username.trim().length > 0 && username.trim().length < 4"
+             class="text-xs text-red-500 mt-1 ml-1">Минимум 4 символа</p>
         </div>
 
         <!-- Пароль -->
@@ -182,6 +228,31 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
               </svg>
             </button>
           </div>
+
+          <!-- Полоска сложности — только при регистрации -->
+          <Transition name="slide">
+            <div v-if="mode === 'register' && password.length > 0" class="mt-2 space-y-1">
+              <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                <div :class="['h-full rounded-full transition-all duration-300', passwordStrength?.color, passwordStrength?.width]"></div>
+              </div>
+              <div class="flex items-center justify-between">
+                <p :class="['text-xs font-medium transition-colors', passwordStrength?.textColor]">
+                  {{ passwordStrength?.label }}
+                </p>
+                <p class="text-xs text-slate-400">
+                  {{ passwordScore }} / 15+ очков
+                </p>
+              </div>
+              <div class="text-xs text-slate-400 space-y-0.5">
+                <p :class="password.length >= 8 ? 'text-green-500' : ''">
+                  {{ password.length >= 8 ? '✓' : '·' }} Минимум 8 символов
+                </p>
+                <p :class="passwordScore >= 15 ? 'text-green-500' : ''">
+                  {{ passwordScore >= 15 ? '✓' : '·' }} Достаточная сложность (нужно 15 очков)
+                </p>
+              </div>
+            </div>
+          </Transition>
         </div>
 
         <!-- Поля только для регистрации -->
@@ -218,7 +289,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                 placeholder="Например: кличка первого питомца">
             </div>
 
-            <!-- Ответ на секретный вопрос -->
+            <!-- Ответ -->
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ответ</label>
               <input v-model="securityAnswer" type="text" required
@@ -230,9 +301,8 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
           </div>
         </Transition>
 
-        <!-- Кнопка отправки -->
-        <button type="submit" :disabled="loading"
-          class="w-full bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all mt-2 disabled:opacity-50">
+        <button type="submit" :disabled="loading || (mode === 'register' && !isPasswordValid)"
+          class="w-full bg-linear-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed">
           <span v-if="loading">Секунду...</span>
           <span v-else>{{ mode === 'login' ? 'Войти' : 'Создать аккаунт' }}</span>
         </button>
@@ -241,7 +311,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
       <!-- ===== ВОССТАНОВЛЕНИЕ ===== -->
       <div v-if="mode === 'recover'" class="space-y-4">
 
-        <!-- Шаг 1: ввод ника -->
+        <!-- Шаг 1 -->
         <div v-if="recoverStep === 1" class="space-y-4">
           <p class="text-sm text-slate-600 dark:text-slate-400 text-center">Введи свой ник — мы покажем секретный вопрос</p>
           <div>
@@ -257,16 +327,13 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
           </button>
         </div>
 
-        <!-- секретный вопрос + новый пароль -->
+        <!-- Шаг 2 -->
         <div v-if="recoverStep === 2" class="space-y-4">
-
-          <!-- Показываем вопрос -->
           <div class="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-xl">
             <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">Секретный вопрос:</p>
             <p class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ recoverQuestion }}</p>
           </div>
 
-          <!-- Ответ -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Ответ</label>
             <input v-model="recoverAnswer" type="text"
@@ -274,7 +341,6 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
               placeholder="Твой ответ...">
           </div>
 
-          <!-- Новый пароль -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Новый пароль</label>
             <div class="relative">
@@ -292,16 +358,28 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                 </svg>
               </button>
             </div>
+
+            <!-- Полоска сложности для восстановления -->
+            <Transition name="slide">
+              <div v-if="recoverNewPassword.length > 0" class="mt-2 space-y-1">
+                <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                  <div :class="['h-full rounded-full transition-all duration-300', recoverPasswordStrength?.color, recoverPasswordStrength?.width]"></div>
+                </div>
+                <p :class="['text-xs font-medium', recoverPasswordStrength?.textColor]">
+                  {{ recoverPasswordStrength?.label }} · {{ recoverPasswordScore }} очков
+                </p>
+              </div>
+            </Transition>
           </div>
 
-          <!-- Подтверждение нового пароля -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Повторите пароль</label>
             <input v-model="recoverConfirmPassword" type="password"
               :class="['w-full px-4 py-3 rounded-xl bg-white dark:bg-slate-700 border focus:ring-2 focus:ring-purple-500 outline-none transition-all dark:text-white',
                 recoverConfirmPassword && recoverNewPassword !== recoverConfirmPassword ? 'border-red-400' : 'border-slate-200 dark:border-slate-600']"
               placeholder="••••••••">
-            <p v-if="recoverConfirmPassword && recoverNewPassword !== recoverConfirmPassword" class="text-xs text-red-500 mt-1 ml-1">Пароли не совпадают</p>
+            <p v-if="recoverConfirmPassword && recoverNewPassword !== recoverConfirmPassword"
+               class="text-xs text-red-500 mt-1 ml-1">Пароли не совпадают</p>
           </div>
 
           <button @click="handleRecoverStep2" :disabled="loading"
@@ -313,19 +391,14 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
       </div>
 
       <div class="mt-6 flex flex-col items-center gap-2">
-        <!-- Переключение вход/регистрация -->
         <button v-if="mode !== 'recover'" @click="setMode(mode === 'login' ? 'register' : 'login')"
           class="text-purple-600 dark:text-purple-400 text-sm hover:underline font-medium">
           {{ mode === 'login' ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти' }}
         </button>
-
-        <!-- Забыл пароль — только на экране входа -->
         <button v-if="mode === 'login'" @click="setMode('recover')"
           class="text-slate-400 dark:text-slate-500 text-xs hover:underline">
           Забыл пароль
         </button>
-
-        <!-- Назад — на экране восстановления -->
         <button v-if="mode === 'recover'" @click="setMode('login')"
           class="text-slate-400 dark:text-slate-500 text-sm hover:underline">
           ← Назад к входу
@@ -347,6 +420,6 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
 }
 .slide-enter-to, .slide-leave-from {
   opacity: 1;
-  max-height: 600px;
+  max-height: 800px;
 }
 </style>

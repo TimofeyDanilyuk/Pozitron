@@ -35,8 +35,17 @@ namespace Pozitron.Api.Controllers
             if (string.IsNullOrWhiteSpace(request.SecurityQuestion) || string.IsNullOrWhiteSpace(request.SecurityAnswer))
                 return BadRequest("Укажи секретный вопрос и ответ.");
 
+            // Валидация ника
+            if (request.Username.Trim().Length < 4 || request.Username.Trim().Length > 32)
+                return BadRequest("Ник должен быть от 4 до 32 символов.");
+
             if (await _context.Users.AnyAsync(u => u.Username == request.Username))
                 return BadRequest("Этот ник уже занят, выбери другой.");
+
+            // Валидация пароля
+            var passwordError = ValidatePassword(request.Password);
+            if (passwordError != null)
+                return BadRequest(passwordError);
 
             var user = new User
             {
@@ -111,10 +120,35 @@ namespace Pozitron.Api.Controllers
             if (!BC.Verify(request.SecurityAnswer.ToLower().Trim(), user.SecurityAnswerHash))
                 return BadRequest("Неверный ответ на секретный вопрос.");
 
+            // Валидация нового пароля
+            var passwordError = ValidatePassword(request.NewPassword);
+            if (passwordError != null)
+                return BadRequest(passwordError);
+
             user.PasswordHash = BC.HashPassword(request.NewPassword);
             await _context.SaveChangesAsync();
 
             return Ok(new { message = "Пароль успешно изменён!" });
+        }
+
+        private static string? ValidatePassword(string password)
+        {
+            if (password.Length < 8)
+                return "Пароль должен быть не короче 8 символов.";
+
+            int score = 0;
+            foreach (var c in password)
+            {
+                if (char.IsLower(c)) score += 1;
+                else if (char.IsUpper(c)) score += 2;
+                else if (char.IsDigit(c)) score += 2;
+                else score += 3; // спецсимвол
+            }
+
+            if (score < 15)
+                return "Пароль слишком простой. Добавь заглавные буквы, цифры или спецсимволы.";
+
+            return null;
         }
 
         private string GenerateJwtToken(User user)
