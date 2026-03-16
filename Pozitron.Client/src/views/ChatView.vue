@@ -3,10 +3,44 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
 import { useRouter } from 'vue-router';
+import api from '../api';
 
 const auth = useAuthStore();
 const chat = useChatStore();
 const router = useRouter();
+
+// ===== BLOB КЕШ ДЛЯ ЗАЩИЩЁННЫХ ФАЙЛОВ =====
+const blobCache = new Map<string, string>();
+
+const fetchFileAsBlob = async (url: string): Promise<string> => {
+  if (blobCache.has(url)) return blobCache.get(url)!;
+  try {
+    const response = await api.get(url, { responseType: 'blob' });
+    const blobUrl = URL.createObjectURL(response.data);
+    blobCache.set(url, blobUrl);
+    return blobUrl;
+  } catch {
+    return url; // fallback
+  }
+};
+
+// Реактивный кеш для шаблона
+const resolvedUrls = ref<Record<string, string>>({});
+
+const resolveUrl = async (url: string) => {
+  if (!url || resolvedUrls.value[url]) return;
+  if (!url.includes('/api/files/')) {
+    resolvedUrls.value[url] = url;
+    return;
+  }
+  resolvedUrls.value[url] = await fetchFileAsBlob(url);
+};
+
+const getResolvedUrl = (url: string | undefined): string => {
+  if (!url) return '';
+  if (!url.includes('/api/files/')) return url;
+  return resolvedUrls.value[url] || '';
+};
 
 const isProfileOpen = ref(false);
 const isSaving = ref(false);
@@ -313,7 +347,13 @@ const scrollToBottom = () => {
   nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }));
 };
 
-watch(currentMessages, scrollToBottom, { deep: true });
+watch(currentMessages, (msgs) => {
+  scrollToBottom();
+  // Резолвим все attachmentUrl в сообщениях
+  for (const msg of msgs) {
+    if (msg.attachmentUrl) resolveUrl(msg.attachmentUrl);
+  }
+}, { deep: true });
 
 onMounted(async () => {
   initTheme();
@@ -682,8 +722,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
                 <!-- Изображение -->
                 <div v-else-if="msg.type === 'Image' && msg.attachmentUrl" class="relative">
-                  <img :src="msg.attachmentUrl" class="max-w-xs rounded-2xl object-cover cursor-pointer"
-                       draggable="false" oncontextmenu="return false" @click="openImage(msg.attachmentUrl!)">
+                  <img v-if="getResolvedUrl(msg.attachmentUrl)"
+                       :src="getResolvedUrl(msg.attachmentUrl)"
+                       class="max-w-xs rounded-2xl object-cover cursor-pointer"
+                       draggable="false" oncontextmenu="return false"
+                       @click="openImage(getResolvedUrl(msg.attachmentUrl))">
+                  <div v-else class="max-w-xs h-32 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
                   <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
                     <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -692,7 +738,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
                 <!-- Видео -->
                 <div v-else-if="msg.type === 'Video' && msg.attachmentUrl" class="relative">
-                  <video :src="msg.attachmentUrl" controls class="max-w-xs rounded-2xl"></video>
+                  <video v-if="getResolvedUrl(msg.attachmentUrl)"
+                         :src="getResolvedUrl(msg.attachmentUrl)"
+                         controls class="max-w-xs rounded-2xl"></video>
+                  <div v-else class="max-w-xs h-32 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                    <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
                   <span v-if="msg.userId === auth.user?.id" class="absolute bottom-1 right-1 opacity-70">
                     <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>

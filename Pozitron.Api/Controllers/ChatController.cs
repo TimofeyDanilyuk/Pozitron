@@ -243,6 +243,11 @@ public class ChatController : ControllerBase
         var user = await _context.Users.FindAsync(userId);
         if (user == null) return Unauthorized();
 
+        // Проверяем что юзер участник чата
+        var isMember = await _context.ChatMembers
+            .AnyAsync(cm => cm.ChatId == chatId && cm.UserId == userId);
+        if (!isMember) return Forbid();
+
         var allowedTypes = new[] { "image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm" };
         if (!allowedTypes.Contains(file.ContentType.ToLower()))
             return BadRequest("Разрешены только изображения и видео");
@@ -261,8 +266,9 @@ public class ChatController : ControllerBase
         using (var stream = new FileStream(filePath, FileMode.Create))
             await file.CopyToAsync(stream);
 
+        // Теперь URL ведёт через авторизованный эндпоинт
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var attachmentUrl = $"{baseUrl}/uploads/attachments/{chatId}/{fileName}";
+        var attachmentUrl = $"{baseUrl}/api/files/{chatId}/{fileName}";
 
         var isVideo = file.ContentType.ToLower().StartsWith("video/");
         var messageType = isVideo ? MessageType.Video : MessageType.Image;

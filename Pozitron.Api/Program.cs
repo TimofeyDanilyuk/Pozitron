@@ -79,7 +79,6 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    // Миграция БД
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
     db.Database.Migrate();
@@ -129,16 +128,27 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseDefaultFiles();
-app.UseStaticFiles();
+
+// Раздаём статику из wwwroot, но блокируем прямой доступ к uploads
+app.UseStaticFiles(new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var path = ctx.File.PhysicalPath ?? "";
+        if (path.Replace("\\", "/").Contains("/uploads/"))
+        {
+            ctx.Context.Response.StatusCode = 403;
+            ctx.Context.Response.ContentLength = 0;
+            ctx.Context.Response.Body = Stream.Null;
+        }
+    }
+});
+
 app.UseRouting();
-
 app.UseCors("AllowVite");
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.UseHttpsRedirection();
-
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapFallbackToFile("index.html");
