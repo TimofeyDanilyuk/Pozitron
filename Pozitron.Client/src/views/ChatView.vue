@@ -15,13 +15,12 @@ const blobCache = new Map<string, string>();
 const fetchFileAsBlob = async (url: string): Promise<string> => {
   if (blobCache.has(url)) return blobCache.get(url)!;
   try {
-    const path = new URL(url).pathname.replace('/api', '');
-    const response = await api.get(path, { responseType: 'blob' });
+    const response = await api.get(url, { responseType: 'blob' });
     const blobUrl = URL.createObjectURL(response.data);
     blobCache.set(url, blobUrl);
     return blobUrl;
   } catch {
-    return url;
+    return url; // fallback
   }
 };
 
@@ -180,6 +179,95 @@ const onAttachmentSelected = async (event: Event) => {
     uploadingAttachment.value = false;
     target.value = '';
   }
+};
+
+// ===== ГОЛОСОВЫЕ СООБЩЕНИЯ =====
+const isRecording = ref(false);
+const audioPlayers = ref<Record<string, { playing: boolean; currentTime: number; duration: number; audio: HTMLAudioElement | null }>>({});
+
+const getAudioPlayer = (msgId: string) => {
+  if (!audioPlayers.value[msgId]) {
+    audioPlayers.value[msgId] = { playing: false, currentTime: 0, duration: 0, audio: null };
+  }
+  return audioPlayers.value[msgId];
+};
+
+const initAudioPlayer = async (msgId: string, url: string) => {
+  const player = getAudioPlayer(msgId);
+  if (player.audio) return;
+  const resolvedUrl = await fetchFileAsBlob(url);
+  const audio = new Audio(resolvedUrl);
+  audio.addEventListener('loadedmetadata', () => { player.duration = audio.duration; });
+  audio.addEventListener('timeupdate', () => { player.currentTime = audio.currentTime; });
+  audio.addEventListener('ended', () => { player.playing = false; player.currentTime = 0; });
+  player.audio = audio;
+  player.duration = audio.duration || 0;
+};
+
+const toggleAudio = async (msgId: string, url: string) => {
+  await initAudioPlayer(msgId, url);
+  const player = audioPlayers.value[msgId];
+  if (!player?.audio) return;
+  // Останавливаем все остальные
+  for (const [id, p] of Object.entries(audioPlayers.value)) {
+    if (id !== msgId && p.playing) { p.audio?.pause(); p.playing = false; }
+  }
+  if (player.playing) {
+    player.audio.pause();
+    player.playing = false;
+  } else {
+    player.audio.play();
+    player.playing = true;
+  }
+};
+
+const seekAudio = (msgId: string, event: MouseEvent) => {
+  const player = audioPlayers.value[msgId];
+  if (!player?.audio || !player.duration) return;
+  const bar = event.currentTarget as HTMLElement;
+  const ratio = event.offsetX / bar.offsetWidth;
+  player.audio.currentTime = ratio * player.duration;
+};
+
+const formatAudioTime = (seconds: number): string => {
+  if (!seconds || isNaN(seconds)) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
+
+// Запись голосового
+let mediaRecorder: MediaRecorder | null = null;
+let audioChunks: Blob[] = [];
+
+const startRecording = async () => {
+  if (!chat.activeChat) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+    mediaRecorder.onstop = async () => {
+      const blob = new Blob(audioChunks, { type: 'audio/webm' });
+      const file = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+      stream.getTracks().forEach(t => t.stop());
+      uploadingAttachment.value = true;
+      try {
+        await chat.uploadAttachment(file);
+      } finally {
+        uploadingAttachment.value = false;
+      }
+    };
+    mediaRecorder.start();
+    isRecording.value = true;
+  } catch {
+    alert('Нет доступа к микрофону');
+  }
+};
+
+const stopRecording = () => {
+  mediaRecorder?.stop();
+  isRecording.value = false;
 };
 
 // Спиннеры
@@ -751,6 +839,47 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                   </span>
                 </div>
 
+                <!-- Голосовое -->
+                <div v-else-if="msg.type === 'Voice' && msg.attachmentUrl"
+                     :class="['flex items-center gap-3 px-3 py-2.5 rounded-2xl w-64',
+                       msg.userId === auth.user?.id
+                         ? 'bg-gradient-to-r from-purple-600 to-indigo-600'
+                         : 'bg-slate-200 dark:bg-slate-800']"
+                     @click.once="initAudioPlayer(msg.id, msg.attachmentUrl)">
+                  <!-- Кнопка play/pause -->
+                  <button @click="toggleAudio(msg.id, msg.attachmentUrl)"
+                          :class="['w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90',
+                            msg.userId === auth.user?.id ? 'bg-white/20 hover:bg-white/30' : 'bg-purple-500 hover:bg-purple-600']">
+                    <svg v-if="!getAudioPlayer(msg.id).playing" viewBox="0 0 24 24" class="w-4 h-4 fill-white ml-0.5">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" class="w-4 h-4 fill-white">
+                      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+                    </svg>
+                  </button>
+                  <!-- Прогресс бар + время -->
+                  <div class="flex-1 min-w-0">
+                    <div class="relative h-1.5 rounded-full cursor-pointer mb-1"
+                         :class="msg.userId === auth.user?.id ? 'bg-white/20' : 'bg-slate-300 dark:bg-slate-600'"
+                         @click="seekAudio(msg.id, $event)">
+                      <div class="h-full rounded-full transition-all"
+                           :class="msg.userId === auth.user?.id ? 'bg-white' : 'bg-purple-500'"
+                           :style="{ width: getAudioPlayer(msg.id).duration ? (getAudioPlayer(msg.id).currentTime / getAudioPlayer(msg.id).duration * 100) + '%' : '0%' }">
+                      </div>
+                    </div>
+                    <span :class="['text-[10px]', msg.userId === auth.user?.id ? 'text-white/70' : 'text-slate-500 dark:text-slate-400']">
+                      {{ getAudioPlayer(msg.id).playing || getAudioPlayer(msg.id).currentTime > 0
+                          ? formatAudioTime(getAudioPlayer(msg.id).currentTime)
+                          : formatAudioTime(getAudioPlayer(msg.id).duration) }}
+                    </span>
+                  </div>
+                  <!-- Галочки -->
+                  <span v-if="msg.userId === auth.user?.id" class="opacity-70 shrink-0">
+                    <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                </div>
+
                 <!-- Обычное сообщение -->
                 <div v-else :class="[
                   'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed',
@@ -945,6 +1074,20 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <button @click="sendMessage" :disabled="!chat.activeChat || !messageInput.trim()"
                   class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 self-end">
             <svg viewBox="0 0 24 24" class="w-6 h-6 fill-white"><path d="M3 12L21 4L14 20L11 13L3 12Z"/></svg>
+          </button>
+
+          <!-- Кнопка микрофона — показывается когда инпут пустой -->
+          <button v-if="!messageInput.trim() && chat.activeChat"
+                  @mousedown="startRecording" @mouseup="stopRecording"
+                  @touchstart.prevent="startRecording" @touchend.prevent="stopRecording"
+                  :class="['px-3 py-2.5 rounded-xl shadow-lg transition-all shrink-0 self-end',
+                    isRecording
+                      ? 'bg-red-500 animate-pulse scale-110'
+                      : 'bg-gradient-to-r from-purple-600 to-indigo-600']">
+            <svg viewBox="0 0 24 24" class="w-6 h-6 fill-white">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h-3v2h8v-2h-3v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
+            </svg>
           </button>
         </div>
       </footer>

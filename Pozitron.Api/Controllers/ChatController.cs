@@ -248,9 +248,13 @@ public class ChatController : ControllerBase
             .AnyAsync(cm => cm.ChatId == chatId && cm.UserId == userId);
         if (!isMember) return Forbid();
 
-        var allowedTypes = new[] { "image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4", "video/webm" };
+        var allowedTypes = new[] { 
+            "image/png", "image/jpeg", "image/gif", "image/webp", 
+            "video/mp4", "video/webm",
+            "audio/webm", "audio/ogg", "audio/wav", "audio/mp4"
+        };
         if (!allowedTypes.Contains(file.ContentType.ToLower()))
-            return BadRequest("Разрешены только изображения и видео");
+            return BadRequest("Разрешены только изображения, видео и аудио");
 
         if (file.Length > 50 * 1024 * 1024)
             return BadRequest("Файл слишком большой (макс. 50MB)");
@@ -272,7 +276,10 @@ public class ChatController : ControllerBase
         var attachmentUrl = $"{baseUrl}/api/files/{chatId}/{fileName}";
 
         var isVideo = file.ContentType.ToLower().StartsWith("video/");
-        var messageType = isVideo ? MessageType.Video : MessageType.Image;
+        var isAudio = file.ContentType.ToLower().StartsWith("audio/");
+        var messageType = isAudio ? MessageType.Voice 
+                        : isVideo ? MessageType.Video 
+                        : MessageType.Image;
 
         string? replyToContent = null;
         string? replyToUsername = null;
@@ -292,6 +299,7 @@ public class ChatController : ControllerBase
                     : replyMsg.Type == MessageType.Image ? "🖼️ Изображение"
                     : replyMsg.Type == MessageType.Video ? "📹 Видео"
                     : replyMsg.Type == MessageType.Sticker ? "🎭 Стикер"
+                    : replyMsg.Type == MessageType.Voice ? "🎤 Голосовое сообщение"
                     : replyMsg.Content;
                 replyToUsername = replyMsg.User?.Username;
             }
@@ -302,7 +310,9 @@ public class ChatController : ControllerBase
             Id = Guid.NewGuid(),
             ChatId = chatId,
             UserId = userId,
-            Content = isVideo ? "📹 Видео" : "🖼️ Изображение",
+            Content = isAudio ? "🎤 Голосовое сообщение" 
+                    : isVideo ? "📹 Видео" 
+                    : "🖼️ Изображение",
             AttachmentUrl = attachmentUrl,
             Type = messageType,
             SentAt = DateTime.UtcNow,

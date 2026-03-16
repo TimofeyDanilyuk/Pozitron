@@ -63,6 +63,8 @@ public class FilesController : ControllerBase
             ".gif"            => "image/gif",
             ".webp"           => "image/webp",
             ".mp4"            => "video/mp4",
+            ".ogg"            => "audio/ogg",
+            ".wav"            => "audio/wav",
             ".webm"           => "video/webm",
             _                 => "application/octet-stream"
         };
