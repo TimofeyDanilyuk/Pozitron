@@ -269,12 +269,15 @@ public class ChatController : ControllerBase
         using (var stream = new FileStream(filePath, FileMode.Create))
             await file.CopyToAsync(stream);
 
-        // Теперь URL ведёт через авторизованный эндпоинт
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var scheme = Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme;
+        var baseUrl = $"{scheme}://{Request.Host}";
         var attachmentUrl = $"{baseUrl}/api/files/{chatId}/{fileName}";
 
-        var isVideo = file.ContentType.ToLower().StartsWith("video/");
-        var messageType = isVideo ? MessageType.Video : MessageType.Image;
+        var isVideo = ct.StartsWith("video/");
+        var isAudio = ct.StartsWith("audio/");
+        var messageType = isAudio ? MessageType.Voice
+                        : isVideo ? MessageType.Video
+                        : MessageType.Image;
 
         string? replyToContent = null;
         string? replyToUsername = null;
@@ -294,6 +297,7 @@ public class ChatController : ControllerBase
                     : replyMsg.Type == MessageType.Image ? "🖼️ Изображение"
                     : replyMsg.Type == MessageType.Video ? "📹 Видео"
                     : replyMsg.Type == MessageType.Sticker ? "🎭 Стикер"
+                    : replyMsg.Type == MessageType.Voice ? "🎤 Голосовое"
                     : replyMsg.Content;
                 replyToUsername = replyMsg.User?.Username;
             }
@@ -304,7 +308,9 @@ public class ChatController : ControllerBase
             Id = Guid.NewGuid(),
             ChatId = chatId,
             UserId = userId,
-            Content = isVideo ? "📹 Видео" : "🖼️ Изображение",
+            Content = isAudio ? "🎤 Голосовое"
+                    : isVideo ? "📹 Видео"
+                    : "🖼️ Изображение",
             AttachmentUrl = attachmentUrl,
             Type = messageType,
             SentAt = DateTime.UtcNow,
