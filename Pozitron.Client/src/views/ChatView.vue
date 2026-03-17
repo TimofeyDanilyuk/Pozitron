@@ -236,6 +236,13 @@ const formatAudioTime = (seconds: number): string => {
   return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
+const getRemainingTime = (msgId: string): string => {
+  const player = audioPlayers.value[msgId];
+  if (!player || !player.duration) return '0:00';
+  const remaining = player.duration - player.currentTime;
+  return formatAudioTime(remaining);
+};
+
 // Запись голосового
 let mediaRecorder: MediaRecorder | null = null;
 let audioChunks: Blob[] = [];
@@ -860,42 +867,65 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
                 <!-- Голосовое -->
                 <div v-else-if="msg.type === 'Voice' && msg.attachmentUrl"
-                     :class="['flex items-center gap-3 px-3 py-2.5 rounded-2xl w-64',
+                     :class="['flex items-center gap-3 px-4 py-3 rounded-2xl w-72',
                        msg.userId === auth.user?.id
                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600'
                          : 'bg-slate-200 dark:bg-slate-800']"
                      @click.once="initAudioPlayer(msg.id, msg.attachmentUrl)">
-                  <!-- Кнопка play/pause -->
+                  <!-- Кнопка play/pause с градиентом -->
                   <button @click="toggleAudio(msg.id, msg.attachmentUrl)"
-                          :class="['w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90',
-                            msg.userId === auth.user?.id ? 'bg-white/20 hover:bg-white/30' : 'bg-purple-500 hover:bg-purple-600']">
-                    <svg v-if="!getAudioPlayer(msg.id).playing" viewBox="0 0 24 24" class="w-4 h-4 fill-white ml-0.5">
+                          :class="['w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90 shadow-md',
+                            msg.userId === auth.user?.id
+                              ? 'bg-gradient-to-br from-white/30 to-white/10 hover:from-white/40 hover:to-white/20'
+                              : 'bg-gradient-to-br from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600']">
+                    <svg v-if="!getAudioPlayer(msg.id).playing" viewBox="0 0 24 24" class="w-5 h-5 fill-white ml-0.5">
                       <path d="M8 5v14l11-7z"/>
                     </svg>
-                    <svg v-else viewBox="0 0 24 24" class="w-4 h-4 fill-white">
+                    <svg v-else viewBox="0 0 24 24" class="w-5 h-5 fill-white">
                       <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
                     </svg>
                   </button>
-                  <!-- Прогресс бар + время -->
+                  <!-- Waveform + время -->
                   <div class="flex-1 min-w-0">
-                    <div class="relative h-1.5 rounded-full cursor-pointer mb-1"
-                         :class="msg.userId === auth.user?.id ? 'bg-white/20' : 'bg-slate-300 dark:bg-slate-600'"
+                    <!-- SVG waveform (20 столбцов) -->
+                    <div class="relative h-8 flex items-end gap-0.5 cursor-pointer mb-1"
                          @click="seekAudio(msg.id, $event)">
-                      <div class="h-full rounded-full transition-all"
-                           :class="msg.userId === auth.user?.id ? 'bg-white' : 'bg-purple-500'"
-                           :style="{ width: getAudioPlayer(msg.id).duration ? (getAudioPlayer(msg.id).currentTime / getAudioPlayer(msg.id).duration * 100) + '%' : '0%' }">
-                      </div>
+                      <svg width="100%" height="100%" viewBox="0 0 200 32" preserveAspectRatio="none" class="absolute inset-0">
+                        <!-- Фон waveform (светлые столбцы) -->
+                        <g v-for="i in 20" :key="'bg'+i"
+                           :transform="`translate(${i*9 + 2}, 0)`">
+                          <rect x="0" :y="32 - (i % 5 + 1) * 4" width="4" :height="(i % 5 + 1) * 4"
+                                :class="msg.userId === auth.user?.id ? 'fill-white/20' : 'fill-slate-300 dark:fill-slate-600'"
+                                rx="1"/>
+                        </g>
+                        <!-- Прогресс waveform (заполненные столбцы) -->
+                        <g v-for="i in 20" :key="'fill'+i"
+                           :transform="`translate(${i*9 + 2}, 0)`"
+                           :opacity="getAudioPlayer(msg.id).duration && (i / 20 <= getAudioPlayer(msg.id).currentTime / getAudioPlayer(msg.id).duration) ? 1 : 0">
+                          <rect x="0" :y="32 - (i % 5 + 1) * 4" width="4" :height="(i % 5 + 1) * 4"
+                                :class="msg.userId === auth.user?.id ? 'fill-white' : 'fill-purple-500'"
+                                rx="1"/>
+                        </g>
+                        <!-- Прогресс линия (тонкая полоса поверх) -->
+                        <rect :x="getAudioPlayer(msg.id).duration ? (getAudioPlayer(msg.id).currentTime / getAudioPlayer(msg.id).duration * 200) : 0"
+                              y="0" width="2" height="32"
+                              :class="msg.userId === auth.user?.id ? 'fill-white/50' : 'fill-purple-400'"/>
+                      </svg>
                     </div>
-                    <span :class="['text-[10px]', msg.userId === auth.user?.id ? 'text-white/70' : 'text-slate-500 dark:text-slate-400']">
-                      {{ getAudioPlayer(msg.id).playing || getAudioPlayer(msg.id).currentTime > 0
-                          ? formatAudioTime(getAudioPlayer(msg.id).currentTime)
-                          : formatAudioTime(getAudioPlayer(msg.id).duration) }}
-                    </span>
+                    <!-- Время (оставшееся) -->
+                    <div class="flex justify-between items-center">
+                      <span :class="['text-[11px] font-medium', msg.userId === auth.user?.id ? 'text-white/90' : 'text-slate-600 dark:text-slate-400']">
+                        -{{ getRemainingTime(msg.id) }}
+                      </span>
+                      <span :class="['text-[10px]', msg.userId === auth.user?.id ? 'text-white/70' : 'text-slate-500 dark:text-slate-500']">
+                        {{ formatAudioTime(getAudioPlayer(msg.id).duration) }}
+                      </span>
+                    </div>
                   </div>
-                  <!-- Галочки -->
-                  <span v-if="msg.userId === auth.user?.id" class="opacity-70 shrink-0">
-                    <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <!-- Галочки прочтения -->
+                  <span v-if="msg.userId === auth.user?.id" class="opacity-80 shrink-0 ml-1">
+                    <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-4 h-4 fill-none stroke-white/90 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <svg v-else viewBox="0 0 24 24" class="w-4 h-4 fill-none stroke-white stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                   </span>
                 </div>
 
