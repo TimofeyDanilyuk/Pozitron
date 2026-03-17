@@ -29,6 +29,7 @@ const formatTime = (s: number) => {
 };
 
 const displayTime = computed(() => {
+    console.debug(`displayTime: ${currentTime.value} / ${duration.value}`);
   if (!isLoaded.value) return '0:00';
   const remaining = duration.value - currentTime.value;
   return formatTime(remaining > 0 ? remaining : 0);
