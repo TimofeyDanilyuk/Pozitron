@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import api from '../api';
 
 const props = defineProps<{
@@ -28,16 +28,16 @@ const formatTime = (s: number) => {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 };
 
-const displayTime = () => {
+const displayTime = computed(() => {
   if (!isLoaded.value) return '0:00';
   const remaining = duration.value - currentTime.value;
   return formatTime(remaining > 0 ? remaining : 0);
-};
+});
 
-const progress = () => {
+const progress = computed(() => {
   if (!duration.value) return 0;
   return currentTime.value / duration.value;
-};
+});
 
 const tick = () => {
   if (audio) currentTime.value = audio.currentTime;
@@ -95,16 +95,25 @@ const loadAudio = async () => {
 
     // Инициализируем аудио
     audio = new Audio(blobUrl);
-    audio.addEventListener('loadedmetadata', () => {
-      duration.value = audio!.duration;
-      isLoaded.value = true;
+    await new Promise<void>((resolve) => {
+      audio!.addEventListener('loadedmetadata', () => {
+        duration.value = audio!.duration;
+        isLoaded.value = true;
+        resolve();
+      });
+      audio!.addEventListener('error', () => resolve());
+      audio!.load();
     });
+
     audio.addEventListener('ended', () => {
       isPlaying.value = false;
       currentTime.value = 0;
-      if (animFrame) cancelAnimationFrame(animFrame);
+      if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
     });
-    audio.load();
+
+    audio.addEventListener('timeupdate', () => {
+      currentTime.value = audio!.currentTime;
+    });
   } catch (e) {
     console.error('Ошибка загрузки аудио:', e);
   } finally {
@@ -119,11 +128,9 @@ const togglePlay = async () => {
   if (isPlaying.value) {
     audio.pause();
     isPlaying.value = false;
-    if (animFrame) cancelAnimationFrame(animFrame);
   } else {
     await audio.play();
     isPlaying.value = true;
-    animFrame = requestAnimationFrame(tick);
   }
 };
 
@@ -179,7 +186,7 @@ onUnmounted(() => {
            @click="seek">
         <div v-for="(h, i) in waveHeights" :key="i"
              :class="['rounded-sm transition-colors duration-75 shrink-0',
-               i / BARS <= progress()
+               i / BARS <= progress
                  ? (isOwn ? 'bg-white' : 'bg-purple-500')
                  : (isOwn ? 'bg-white/30' : 'bg-slate-400 dark:bg-slate-500')]"
              :style="{ width: '3px', height: `${Math.round(h * 28) + 2}px` }">
@@ -189,7 +196,7 @@ onUnmounted(() => {
       <!-- Время -->
       <span :class="['text-[11px] font-medium tabular-nums',
         isOwn ? 'text-white/90' : 'text-slate-600 dark:text-slate-400']">
-        {{ displayTime() }}
+        {{ displayTime }}
       </span>
     </div>
 
