@@ -129,20 +129,32 @@ using (var scope = app.Services.CreateScope())
 
 app.UseDefaultFiles();
 
-// Раздаём статику из wwwroot, блокируем только attachments — они идут через /api/files/
-app.UseStaticFiles(new StaticFileOptions
+// 1. Фронтенд — JS, CSS, иконки из wwwroot
+app.UseStaticFiles();
+
+// 2. Uploads из Volume — стикеры, аватарки публично
+//    Attachments блокируем — они отдаются через /api/files/ с авторизацией
+var uploadPath = Environment.GetEnvironmentVariable("UPLOAD_PATH")
+    ?? Path.Combine(app.Environment.WebRootPath ?? "", "uploads");
+
+if (Directory.Exists(uploadPath))
 {
-    OnPrepareResponse = ctx =>
+    app.UseStaticFiles(new StaticFileOptions
     {
-        var path = ctx.File.PhysicalPath?.Replace("\\", "/") ?? "";
-        if (path.Contains("/uploads/attachments/"))
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadPath),
+        RequestPath = "/uploads",
+        OnPrepareResponse = ctx =>
         {
-            ctx.Context.Response.StatusCode = 403;
-            ctx.Context.Response.ContentLength = 0;
-            ctx.Context.Response.Body = Stream.Null;
+            var path = ctx.File.PhysicalPath?.Replace("\\", "/") ?? "";
+            if (path.Contains("/attachments/"))
+            {
+                ctx.Context.Response.StatusCode = 403;
+                ctx.Context.Response.ContentLength = 0;
+                ctx.Context.Response.Body = Stream.Null;
+            }
         }
-    }
-});
+    });
+}
 
 app.UseRouting();
 app.UseCors("AllowVite");
