@@ -124,7 +124,14 @@ public class StickerController : ControllerBase
 
         var rootPath = GetUploadRoot();
         var folderPath = Path.Combine(rootPath, "stickers", packId.ToString());
+
+        Console.WriteLine($"=== STICKER ROOT: {rootPath}");
+        Console.WriteLine($"=== STICKER FOLDER: {folderPath}");
+        Console.WriteLine($"=== FOLDER EXISTS: {Directory.Exists(folderPath)}");
+
         if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
+
+        Console.WriteLine($"=== FOLDER CREATED: {Directory.Exists(folderPath)}");
 
         var isGif = file.ContentType.ToLower() == "image/gif";
         var extension = isGif ? ".gif" : ".png";
