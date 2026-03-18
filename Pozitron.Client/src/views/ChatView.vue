@@ -147,7 +147,10 @@ const handleToggleStickerPicker = async () => {
 // ===== ГОЛОСОВЫЕ =====
 const { isRecording, toggleRecording } = useVoiceRecorder(async (file) => {
   uploadingAttachment.value = true;
-  try { await chat.uploadAttachment(file); }
+  try {
+    await chat.uploadAttachment(file);
+    scrollToBottom();
+  }
   finally { uploadingAttachment.value = false; }
 });
 
@@ -157,7 +160,10 @@ const onAttachmentSelected = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (!target.files || !target.files[0]) return;
   uploadingAttachment.value = true;
-  try { await chat.uploadAttachment(target.files[0]); }
+  try {
+    await chat.uploadAttachment(target.files[0]);
+    scrollToBottom();
+  }
   catch { alert('Ошибка при загрузке файла'); }
   finally { uploadingAttachment.value = false; target.value = ''; }
 };
@@ -241,10 +247,15 @@ onMounted(async () => {
   await chat.connect();
   await chat.loadChats();
   chatsLoading.value = false;
-  if (window.innerWidth >= 768) {
-    const general = chat.chats.find(c => c.type === 0);
-    if (general) await chat.openChat(general);
-  }
+  // Не открываем чат автоматически — пусть пользователь выбирает сам
+
+  // Закрытие чата по Escape
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !isProfileOpen.value && !isAddContactsOpen.value && !stickerPackModal.value) {
+      chat.activeChat = null;
+      mobileView.value = 'list';
+    }
+  });
 });
 onUnmounted(() => chat.disconnect());
 
@@ -259,6 +270,7 @@ const sendMessage = async () => {
   if (!messageInput.value.trim()) return;
   await chat.sendMessage(messageInput.value);
   messageInput.value = '';
+  scrollToBottom();
 };
 const handleKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
