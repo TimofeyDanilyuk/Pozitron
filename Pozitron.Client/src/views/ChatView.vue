@@ -74,7 +74,47 @@ const sendReaction = async (emoji: string) => {
   reactionPicker.value = null;
 };
 
-// ===== СТИКЕРЫ =====
+// ===== ВЫДЕЛЕНИЕ И УДАЛЕНИЕ =====
+const selectedMessages = ref<Set<string>>(new Set());
+const isSelecting = ref(false);
+
+const toggleSelectMessage = (msgId: string) => {
+  if (selectedMessages.value.has(msgId)) selectedMessages.value.delete(msgId);
+  else selectedMessages.value.add(msgId);
+  selectedMessages.value = new Set(selectedMessages.value);
+};
+
+const cancelSelection = () => {
+  selectedMessages.value = new Set();
+  isSelecting.value = false;
+};
+
+const deleteSelected = async () => {
+  if (selectedMessages.value.size === 0) return;
+  await chat.deleteMessages([...selectedMessages.value]);
+  cancelSelection();
+};
+
+const onDeleteFromMenu = () => {
+  if (!contextMenu.value) return;
+  const msgId = contextMenu.value.msg.id;
+  closeContextMenu();
+  // Если уже выделяем — добавляем в выделение, иначе сразу удаляем
+  if (isSelecting.value) {
+    selectedMessages.value.add(msgId);
+    selectedMessages.value = new Set(selectedMessages.value);
+  } else {
+    chat.deleteMessages([msgId]);
+  }
+};
+
+const onSelectFromMenu = () => {
+  if (!contextMenu.value) return;
+  const msgId = contextMenu.value.msg.id;
+  isSelecting.value = true;
+  selectedMessages.value = new Set([msgId]);
+  closeContextMenu();
+};
 const stickerPackModal = ref<null | { id: string, name: string, coverUrl?: string, stickers: any[], isAdded: boolean, createdBy: string }>(null);
 const stickerPackModalLoading = ref(false);
 
@@ -185,8 +225,11 @@ const onMessagesScroll = () => {
   showScrollButton.value = scrollHeight - scrollTop - clientHeight > 150;
 };
 
-watch(currentMessages, (msgs) => {
-  scrollToBottom();
+watch(currentMessages, (msgs, prevMsgs) => {
+  // Скроллим вниз только если добавилось новое сообщение, не при обновлении реакций
+  if (msgs.length > (prevMsgs?.length ?? 0)) {
+    scrollToBottom();
+  }
   for (const msg of msgs) {
     if (msg.attachmentUrl) resolveUrl(msg.attachmentUrl);
   }
@@ -424,7 +467,20 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </div>
 
           <div v-for="msg in currentMessages" :key="msg.id" :id="`msg-${msg.id}`"
-               :class="['flex gap-2 items-end', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+               :class="['flex gap-2 items-end transition-colors rounded-xl px-1',
+                 msg.userId === auth.user?.id ? 'flex-row-reverse' : '',
+                 isSelecting && selectedMessages.has(msg.id) ? 'bg-purple-100 dark:bg-purple-600/20' : '']"
+               @click="isSelecting && msg.userId === auth.user?.id ? toggleSelectMessage(msg.id) : null">
+
+            <!-- Чекбокс выделения (только свои) -->
+            <div v-if="isSelecting && msg.userId === auth.user?.id"
+                 :class="['shrink-0 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
+                   selectedMessages.has(msg.id) ? 'bg-purple-600 border-purple-600' : 'border-slate-300 dark:border-slate-600']"
+                 :style="msg.userId === auth.user?.id ? 'order: -1' : ''">
+              <svg v-if="selectedMessages.has(msg.id)" viewBox="0 0 16 16" class="w-3 h-3 fill-white">
+                <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
+              </svg>
+            </div>
             <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
             <div v-else class="w-7 h-7 rounded-lg bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ msg.username?.[0]?.toUpperCase() }}</div>
 
@@ -460,6 +516,24 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
           </svg>
         </button>
+      </Transition>
+
+      <!-- Панель удаления при выделении -->
+      <Transition name="picker">
+        <div v-if="isSelecting"
+             class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-3 z-20">
+          <button @click="cancelSelection" class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-all active:scale-90">
+            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
+          </button>
+          <span class="flex-1 text-sm font-bold text-slate-700 dark:text-slate-300">
+            {{ selectedMessages.size > 0 ? `Выбрано: ${selectedMessages.size}` : 'Выберите сообщения' }}
+          </span>
+          <button @click="deleteSelected" :disabled="selectedMessages.size === 0"
+                  class="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-40">
+            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Удалить
+          </button>
+        </div>
       </Transition>
 
       <!-- Футер -->
@@ -688,7 +762,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
     <Transition name="fade">
       <div v-if="contextMenu" class="fixed inset-0 z-50" @click="closeContextMenu" @contextmenu.prevent="closeContextMenu">
         <div :style="{ position: 'fixed', left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden w-40" @click.stop>
+             class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden w-44" @click.stop>
           <button @click="onReplyFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700">
             <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17l-5-5 5-5M20 18v-2a4 4 0 0 0-4-4H4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Ответить
@@ -697,6 +771,17 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/><path d="M8 14c1 2 7 2 8 0" stroke-linecap="round"/></svg>
             Реакция
           </button>
+          <!-- Только для своих сообщений -->
+          <template v-if="contextMenu.msg.userId === auth.user?.id">
+            <button @click="onSelectFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
+              <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Выбрать
+            </button>
+            <button @click="onDeleteFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all active:bg-red-100 dark:active:bg-red-500/20 border-t border-slate-100 dark:border-slate-800">
+              <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Удалить
+            </button>
+          </template>
         </div>
       </div>
     </Transition>

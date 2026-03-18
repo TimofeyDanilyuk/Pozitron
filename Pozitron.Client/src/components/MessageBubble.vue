@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import AudioPlayer from './AudioPlayer.vue';
+import MediaViewer from './MediaViewer.vue';
 import { useBlobCache } from '../composables/useBlobCache';
 import type { Message } from '../store/chat';
 
@@ -16,7 +18,10 @@ const props = defineProps<{
 
 const { getResolvedUrl } = useBlobCache();
 
-const openImage = (url: string) => window.open(url, '_blank');
+const viewer = ref<{ url: string; type: 'Image' | 'Video' } | null>(null);
+const openMedia = (url: string, type: 'Image' | 'Video') => {
+  viewer.value = { url, type };
+};
 </script>
 
 <template>
@@ -45,9 +50,9 @@ const openImage = (url: string) => window.open(url, '_blank');
     <div v-else-if="msg.type === 'Image' && msg.attachmentUrl" class="relative">
       <img v-if="getResolvedUrl(msg.attachmentUrl)"
            :src="getResolvedUrl(msg.attachmentUrl)"
-           class="max-w-xs rounded-2xl object-cover cursor-pointer"
+           class="max-w-xs rounded-2xl object-cover cursor-pointer active:scale-95 transition-transform"
            draggable="false" oncontextmenu="return false"
-           @click="openImage(getResolvedUrl(msg.attachmentUrl))">
+           @click="openMedia(getResolvedUrl(msg.attachmentUrl), 'Image')">
       <div v-else class="max-w-xs h-32 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
         <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
       </div>
@@ -59,9 +64,18 @@ const openImage = (url: string) => window.open(url, '_blank');
 
     <!-- Видео -->
     <div v-else-if="msg.type === 'Video' && msg.attachmentUrl" class="relative">
-      <video v-if="getResolvedUrl(msg.attachmentUrl)"
-             :src="getResolvedUrl(msg.attachmentUrl)"
-             controls class="max-w-xs rounded-2xl"></video>
+      <div v-if="getResolvedUrl(msg.attachmentUrl)"
+           class="relative max-w-xs cursor-pointer group"
+           @click="openMedia(getResolvedUrl(msg.attachmentUrl), 'Video')">
+        <video :src="getResolvedUrl(msg.attachmentUrl)"
+               class="max-w-xs rounded-2xl pointer-events-none"></video>
+        <!-- Кнопка play поверх видео -->
+        <div class="absolute inset-0 flex items-center justify-center rounded-2xl bg-black/30 group-hover:bg-black/40 transition-colors">
+          <div class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            <svg viewBox="0 0 24 24" class="w-6 h-6 fill-white ml-0.5"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+        </div>
+      </div>
       <div v-else class="max-w-xs h-32 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
         <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
       </div>
@@ -106,5 +120,11 @@ const openImage = (url: string) => window.open(url, '_blank');
         <span class="font-bold">{{ r.count }}</span>
       </button>
     </div>
+
+    <!-- Лайтбокс -->
+    <MediaViewer v-if="viewer"
+                 :url="viewer.url"
+                 :type="viewer.type"
+                 @close="viewer = null" />
   </div>
 </template>

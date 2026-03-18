@@ -141,6 +141,15 @@ export const useChatStore = defineStore('chat', {
         }
       });
 
+      this.connection.on('MessagesDeleted', ({ chatId, messageIds }: { chatId: string, messageIds: string[] }) => {
+        const key = Object.keys(this.messages).find(k => k.toLowerCase() === chatId.toLowerCase());
+        if (key) {
+          this.messages[key] = this.messages[key]!.filter(
+            m => !messageIds.some(id => id.toLowerCase() === m.id.toLowerCase())
+          );
+        }
+      });
+
       this.connection.onreconnected(async () => {
         await this._joinAllChats();
         if (this.activeChat) {
@@ -304,6 +313,15 @@ export const useChatStore = defineStore('chat', {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       this.replyingTo = null;
+    },
+
+    async deleteMessages(messageIds: string[]) {
+      if (!this.activeChat) return;
+      if (messageIds.length === 1) {
+        await api.delete(`/chat/${this.activeChat.id}/messages/${messageIds[0]}`);
+      } else {
+        await api.delete(`/chat/${this.activeChat.id}/messages`, { data: messageIds });
+      }
     },
   }
 });

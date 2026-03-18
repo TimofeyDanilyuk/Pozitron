@@ -236,7 +236,50 @@ public class ChatController : ControllerBase
         return Ok();
     }
 
-    [HttpPost("{chatId}/upload")]
+    [HttpDelete("{chatId}/messages/{messageId}")]
+    public async Task<IActionResult> DeleteMessage(Guid chatId, Guid messageId)
+    {
+        var userId = CurrentUserId;
+        var message = await _context.Messages
+            .FirstOrDefaultAsync(m => m.Id == messageId && m.ChatId == chatId);
+
+        if (message == null) return NotFound();
+        if (message.UserId != userId) return Forbid();
+
+        _context.Messages.Remove(message);
+        await _context.SaveChangesAsync();
+
+        await _hub.Clients.Group(chatId.ToString()).SendAsync("MessagesDeleted", new
+        {
+            chatId = chatId.ToString(),
+            messageIds = new[] { messageId.ToString() }
+        });
+
+        return Ok();
+    }
+
+    [HttpDelete("{chatId}/messages")]
+    public async Task<IActionResult> DeleteMessages(Guid chatId, [FromBody] List<Guid> messageIds)
+    {
+        var userId = CurrentUserId;
+        var messages = await _context.Messages
+            .Where(m => m.ChatId == chatId && messageIds.Contains(m.Id) && m.UserId == userId)
+            .ToListAsync();
+
+        if (messages.Count == 0) return NotFound();
+
+        _context.Messages.RemoveRange(messages);
+        await _context.SaveChangesAsync();
+
+        var deletedIds = messages.Select(m => m.Id.ToString()).ToList();
+        await _hub.Clients.Group(chatId.ToString()).SendAsync("MessagesDeleted", new
+        {
+            chatId = chatId.ToString(),
+            messageIds = deletedIds
+        });
+
+        return Ok();
+    }
     public async Task<IActionResult> UploadAttachment(Guid chatId, IFormFile file, [FromForm] string? replyToMessageId = null)
     {
         var userId = CurrentUserId;
