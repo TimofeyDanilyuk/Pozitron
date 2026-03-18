@@ -26,7 +26,13 @@ public class StickerController : ControllerBase
     private Guid CurrentUserId =>
         Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
 
-    // Получить все паки текущего пользователя (добавленные)
+    private string GetUploadRoot() =>
+        Environment.GetEnvironmentVariable("UPLOAD_PATH")
+        ?? Path.Combine(_environment.WebRootPath ?? Directory.GetCurrentDirectory(), "uploads");
+
+    private string GetBaseUrl() =>
+        $"{(Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme)}://{Request.Host}";
+
     [HttpGet("my")]
     public async Task<IActionResult> GetMyPacks()
     {
@@ -49,7 +55,6 @@ public class StickerController : ControllerBase
         return Ok(packs);
     }
 
-    // Получить пак по id (для просмотра чужого пака)
     [HttpGet("{packId}")]
     public async Task<IActionResult> GetPack(Guid packId)
     {
@@ -75,7 +80,6 @@ public class StickerController : ControllerBase
         return Ok(pack);
     }
 
-    // Создать новый пак
     [HttpPost]
     public async Task<IActionResult> CreatePack([FromBody] CreatePackRequest request)
     {
@@ -89,8 +93,6 @@ public class StickerController : ControllerBase
         };
 
         _context.StickerPacks.Add(pack);
-
-        // Автоматически добавляем пак создателю
         _context.UserStickerPacks.Add(new UserStickerPack
         {
             UserId = userId,
@@ -101,7 +103,6 @@ public class StickerController : ControllerBase
         return Ok(new { pack.Id, pack.Name });
     }
 
-    // Загрузить стикер в пак
     [HttpPost("{packId}/stickers")]
     public async Task<IActionResult> AddSticker(Guid packId, IFormFile file)
     {
@@ -115,15 +116,14 @@ public class StickerController : ControllerBase
         if (!allowedTypes.Contains(file.ContentType.ToLower()))
             return BadRequest("Разрешены только png, jpg, gif, webp");
 
-        // GIF — только ограничение по размеру
         var maxSize = file.ContentType.ToLower() == "image/gif" ? 2 * 1024 * 1024 : 5 * 1024 * 1024;
         if (file.Length > maxSize)
             return BadRequest(file.ContentType.ToLower() == "image/gif"
                 ? "GIF слишком большой (макс. 2MB)"
                 : "Файл слишком большой (макс. 5MB)");
 
-        var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-        var folderPath = Path.Combine(rootPath, "uploads", "stickers", packId.ToString());
+        var rootPath = GetUploadRoot();
+        var folderPath = Path.Combine(rootPath, "stickers", packId.ToString());
         if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
         var isGif = file.ContentType.ToLower() == "image/gif";
@@ -133,31 +133,27 @@ public class StickerController : ControllerBase
 
         if (isGif)
         {
-            // GIF сохраняем как есть
             using var stream = new FileStream(filePath, FileMode.Create);
             await file.CopyToAsync(stream);
         }
         else
         {
-            // PNG/JPG — ресайзим до 512x512 и сохраняем как PNG
             using var inputStream = file.OpenReadStream();
             using var image = await SixLabors.ImageSharp.Image.LoadAsync(inputStream);
 
-            // Ресайз только если больше 512px
             if (image.Width > 512 || image.Height > 512)
             {
-                image.Mutate(x => x.Resize(new SixLabors.ImageSharp.Processing.ResizeOptions
+                image.Mutate(x => x.Resize(new ResizeOptions
                 {
                     Size = new SixLabors.ImageSharp.Size(512, 512),
-                    Mode = SixLabors.ImageSharp.Processing.ResizeMode.Max
+                    Mode = ResizeMode.Max
                 }));
             }
 
             await image.SaveAsPngAsync(filePath);
         }
 
-        var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var url = $"{baseUrl}/uploads/stickers/{packId}/{fileName}";
+        var url = $"{GetBaseUrl()}/uploads/stickers/{packId}/{fileName}";
 
         var order = await _context.Stickers.CountAsync(s => s.PackId == packId);
         var sticker = new Sticker
@@ -177,7 +173,6 @@ public class StickerController : ControllerBase
         return Ok(new { sticker.Id, sticker.Url });
     }
 
-    // Удалить стикер из пака
     [HttpDelete("{packId}/stickers/{stickerId}")]
     public async Task<IActionResult> DeleteSticker(Guid packId, Guid stickerId)
     {
@@ -193,7 +188,6 @@ public class StickerController : ControllerBase
         return Ok();
     }
 
-    // Добавить чужой пак себе
     [HttpPost("{packId}/add")]
     public async Task<IActionResult> AddPack(Guid packId)
     {
@@ -213,7 +207,6 @@ public class StickerController : ControllerBase
         return Ok();
     }
 
-    // Убрать пак
     [HttpDelete("{packId}/remove")]
     public async Task<IActionResult> RemovePack(Guid packId)
     {

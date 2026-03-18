@@ -129,13 +129,13 @@ using (var scope = app.Services.CreateScope())
 
 app.UseDefaultFiles();
 
-// Раздаём статику из wwwroot, но блокируем прямой доступ к uploads
+// Раздаём статику из wwwroot, блокируем только attachments — они идут через /api/files/
 app.UseStaticFiles(new StaticFileOptions
 {
     OnPrepareResponse = ctx =>
     {
-        var path = ctx.File.PhysicalPath ?? "";
-        if (path.Replace("\\", "/").Contains("/uploads/"))
+        var path = ctx.File.PhysicalPath?.Replace("\\", "/") ?? "";
+        if (path.Contains("/uploads/attachments/"))
         {
             ctx.Context.Response.StatusCode = 403;
             ctx.Context.Response.ContentLength = 0;
