@@ -4,7 +4,6 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +29,6 @@ namespace Pozitron.Api.Controllers
             _environment = environment;
         }
 
-        // Получить список контактов
         [HttpGet("contacts")]
         public async Task<IActionResult> GetContacts()
         {
@@ -49,7 +47,6 @@ namespace Pozitron.Api.Controllers
             return Ok(contacts);
         }
 
-        // Добавить контакт
         [HttpPost("contacts/{contactId}")]
         public async Task<IActionResult> AddContact(Guid contactId)
         {
@@ -62,7 +59,6 @@ namespace Pozitron.Api.Controllers
 
             _context.UserContacts.Add(new UserContact { UserId = userId, ContactId = contactId });
 
-            // Создаём DM чат если нет
             var myChats = await _context.ChatMembers
                 .Where(cm => cm.UserId == userId)
                 .Select(cm => cm.ChatId)
@@ -95,7 +91,6 @@ namespace Pozitron.Api.Controllers
             var currentUser = await _context.Users.FindAsync(userId);
             var contact = await _context.Users.FindAsync(contactId);
 
-            // Уведомляем себя о новом чате
             if (ChatHub.OnlineUsers.TryGetValue(userId.ToString(), out var myConn))
             {
                 await _hub.Clients.Client(myConn).SendAsync("NewDmChat", new {
@@ -111,16 +106,15 @@ namespace Pozitron.Api.Controllers
             return Ok(new { chatId });
         }
 
-        // Удалить контакт
         [HttpDelete("contacts/{contactId}")]
         public async Task<IActionResult> RemoveContact(Guid contactId)
         {
             var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
             var contact = await _context.UserContacts
                 .FirstOrDefaultAsync(uc => uc.UserId == userId && uc.ContactId == contactId);
-            
+
             if (contact == null) return NotFound();
-            
+
             _context.UserContacts.Remove(contact);
             await _context.SaveChangesAsync();
             return Ok();
@@ -129,12 +123,14 @@ namespace Pozitron.Api.Controllers
         [HttpPost("upload-avatar")]
         public async Task<IActionResult> UploadAvatar(IFormFile file)
         {
-            try 
+            try
             {
                 if (file == null || file.Length == 0) return BadRequest("Файл не выбран");
 
-                var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-                var folderPath = Path.Combine(rootPath, "uploads", "avatars");
+                // Используем UPLOAD_PATH если задан, иначе wwwroot/uploads
+                var rootPath = Environment.GetEnvironmentVariable("UPLOAD_PATH")
+                    ?? Path.Combine(_environment.WebRootPath ?? Directory.GetCurrentDirectory(), "uploads");
+                var folderPath = Path.Combine(rootPath, "avatars");
 
                 if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
@@ -143,16 +139,16 @@ namespace Pozitron.Api.Controllers
                 var filePath = Path.Combine(folderPath, fileName);
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
-                {
                     await file.CopyToAsync(stream);
-                }
 
-                var baseUrl = $"{Request.Scheme}://{Request.Host}";
+                // Правильный scheme через Railway proxy
+                var scheme = Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme;
+                var baseUrl = $"{scheme}://{Request.Host}";
                 var avatarUrl = $"{baseUrl}/uploads/avatars/{fileName}";
 
                 var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
                 var user = await _context.Users.FindAsync(userId);
-                
+
                 if (user == null) return NotFound("Пользователь не найден");
 
                 user.AvatarUrl = avatarUrl;

@@ -258,8 +258,9 @@ public class ChatController : ControllerBase
         if (file.Length > 50 * 1024 * 1024)
             return BadRequest("Файл слишком большой (макс. 50MB)");
 
-        var rootPath = _environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-        var folderPath = Path.Combine(rootPath, "uploads", "attachments", chatId.ToString());
+        var rootPath = Environment.GetEnvironmentVariable("UPLOAD_PATH")
+            ?? Path.Combine(_environment.WebRootPath ?? Directory.GetCurrentDirectory(), "uploads");
+        var folderPath = Path.Combine(rootPath, "attachments", chatId.ToString());
         if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
         var extension = Path.GetExtension(file.FileName).ToLower();
@@ -269,15 +270,12 @@ public class ChatController : ControllerBase
         using (var stream = new FileStream(filePath, FileMode.Create))
             await file.CopyToAsync(stream);
 
-        var scheme = Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme;
-        var baseUrl = $"{scheme}://{Request.Host}";
+        // Теперь URL ведёт через авторизованный эндпоинт
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
         var attachmentUrl = $"{baseUrl}/api/files/{chatId}/{fileName}";
 
-        var isVideo = ct.StartsWith("video/");
-        var isAudio = ct.StartsWith("audio/");
-        var messageType = isAudio ? MessageType.Voice
-                        : isVideo ? MessageType.Video
-                        : MessageType.Image;
+        var isVideo = file.ContentType.ToLower().StartsWith("video/");
+        var messageType = isVideo ? MessageType.Video : MessageType.Image;
 
         string? replyToContent = null;
         string? replyToUsername = null;
@@ -297,7 +295,6 @@ public class ChatController : ControllerBase
                     : replyMsg.Type == MessageType.Image ? "🖼️ Изображение"
                     : replyMsg.Type == MessageType.Video ? "📹 Видео"
                     : replyMsg.Type == MessageType.Sticker ? "🎭 Стикер"
-                    : replyMsg.Type == MessageType.Voice ? "🎤 Голосовое"
                     : replyMsg.Content;
                 replyToUsername = replyMsg.User?.Username;
             }
@@ -308,9 +305,7 @@ public class ChatController : ControllerBase
             Id = Guid.NewGuid(),
             ChatId = chatId,
             UserId = userId,
-            Content = isAudio ? "🎤 Голосовое"
-                    : isVideo ? "📹 Видео"
-                    : "🖼️ Изображение",
+            Content = isVideo ? "📹 Видео" : "🖼️ Изображение",
             AttachmentUrl = attachmentUrl,
             Type = messageType,
             SentAt = DateTime.UtcNow,

@@ -38,10 +38,10 @@ public class FilesController : ControllerBase
         if (string.IsNullOrEmpty(safeFilename) || safeFilename != filename)
             return BadRequest();
 
-        var rootPath = _environment.WebRootPath
-            ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var rootPath = Environment.GetEnvironmentVariable("UPLOAD_PATH")
+            ?? Path.Combine(_environment.WebRootPath ?? Directory.GetCurrentDirectory(), "uploads");
 
-        var filePath = Path.Combine(rootPath, "uploads", "attachments", chatId.ToString(), safeFilename);
+        var filePath = Path.Combine(rootPath, "attachments", chatId.ToString(), safeFilename);
 
         if (!System.IO.File.Exists(filePath))
             return NotFound();
@@ -63,8 +63,6 @@ public class FilesController : ControllerBase
             ".gif"            => "image/gif",
             ".webp"           => "image/webp",
             ".mp4"            => "video/mp4",
-            ".ogg"            => "audio/ogg",
-            ".wav"            => "audio/wav",
             ".webm"           => "video/webm",
             _                 => "application/octet-stream"
         };
