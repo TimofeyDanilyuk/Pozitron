@@ -70,10 +70,10 @@ public class ChatHub : Hub
                 replyToId = replyMsg.Id;
                 replyToContent = replyMsg.Type == MessageType.Text
                     ? replyMsg.Content
-                    : replyMsg.Type == MessageType.Image ? "🖼️ Изображение"
-                    : replyMsg.Type == MessageType.Video ? "📹 Видео"
-                    : replyMsg.Type == MessageType.Sticker ? "🎭 Стикер"
-                    : replyMsg.Type == MessageType.Voice ? "🎤 Голосовое"
+                    : replyMsg.Type == MessageType.Image ? "Изображение"
+                    : replyMsg.Type == MessageType.Video ? "Видео"
+                    : replyMsg.Type == MessageType.Sticker ? "Стикер"
+                    : replyMsg.Type == MessageType.Voice ? "Голосовое"
                     : replyMsg.Content;
                 replyToUsername = replyMsg.User?.Username;
             }

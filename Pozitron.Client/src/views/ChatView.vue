@@ -352,10 +352,19 @@ const filteredAllUsers = computed(() => {
 
 const parseLastMessage = (text?: string) => {
   if (!text) return { icon: null as null | 'image' | 'video' | 'voice' | 'sticker', label: 'Нет сообщений' };
-  if (text.startsWith('📷')) return { icon: 'image' as const, label: text.replace(/^📷\s*/, '') || 'Фото' };
-  if (text.startsWith('🎬')) return { icon: 'video' as const, label: text.replace(/^🎬\s*/, '') || 'Видео' };
-  if (text.startsWith('🎤')) return { icon: 'voice' as const, label: text.replace(/^🎤\s*/, '') || 'Голосовое' };
-  if (text.startsWith('🎭')) return { icon: 'sticker' as const, label: text.replace(/^🎭\s*/, '') || 'Стикер' };
+  const clean = text.replace(/^(📷|🖼️|🎬|📹|🎤|🎭)\s*/u, '').trim();
+  if (/^(📷|🖼️)/u.test(text) || clean === 'Изображение' || clean === 'Фото') {
+    return { icon: 'image' as const, label: clean || 'Изображение' };
+  }
+  if (/^(🎬|📹)/u.test(text) || clean === 'Видео') {
+    return { icon: 'video' as const, label: clean || 'Видео' };
+  }
+  if (text.startsWith('🎤') || clean === 'Голосовое') {
+    return { icon: 'voice' as const, label: clean || 'Голосовое' };
+  }
+  if (text.startsWith('🎭') || clean === 'Стикер') {
+    return { icon: 'sticker' as const, label: clean || 'Стикер' };
+  }
   return { icon: null, label: text };
 };
 const openAddContacts = async () => {

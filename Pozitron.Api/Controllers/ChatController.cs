@@ -375,9 +375,9 @@ public class ChatController : ControllerBase
                 replyToId = replyMsg.Id;
                 replyToContent = replyMsg.Type == MessageType.Text
                     ? replyMsg.Content
-                    : replyMsg.Type == MessageType.Image ? "🖼️ Изображение"
-                    : replyMsg.Type == MessageType.Video ? "📹 Видео"
-                    : replyMsg.Type == MessageType.Sticker ? "🎭 Стикер"
+                    : replyMsg.Type == MessageType.Image ? "Изображение"
+                    : replyMsg.Type == MessageType.Video ? "Видео"
+                    : replyMsg.Type == MessageType.Sticker ? "Стикер"
                     : replyMsg.Content;
                 replyToUsername = replyMsg.User?.Username;
             }
@@ -388,9 +388,9 @@ public class ChatController : ControllerBase
             Id = Guid.NewGuid(),
             ChatId = chatId,
             UserId = userId,
-            Content = isAudio ? "🎤 Голосовое"
-                    : isVideo ? "📹 Видео"
-                    : "🖼️ Изображение",
+            Content = isAudio ? "Голосовое"
+                    : isVideo ? "Видео"
+                    : "Изображение",
             AttachmentUrl = attachmentUrl,
             Type = messageType,
             SentAt = DateTime.UtcNow,

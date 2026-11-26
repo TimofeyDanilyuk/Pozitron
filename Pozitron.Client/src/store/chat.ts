@@ -92,7 +92,7 @@ export const useChatStore = defineStore('chat', {
           this.messages[msg.chatId]!.push(msg);
         }
         const chat = this.chats.find(c => c.id === msg.chatId);
-        if (chat) chat.lastMessage = msg.type === 'Sticker' ? '🎭 Стикер' : msg.content;
+        if (chat) chat.lastMessage = msg.type === 'Sticker' ? 'Стикер' : msg.content;
       });
 
       this.connection.on('OnlineUsers', (userIds: string[]) => {
