@@ -50,6 +50,11 @@ const generateWaveform = async (arrayBuffer: ArrayBuffer) => {
     const decoded = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
     await audioCtx.close();
 
+    if (decoded.duration && isFinite(decoded.duration)) {
+      duration.value = decoded.duration;
+      isLoaded.value = true;
+    }
+
     const channelData = decoded.getChannelData(0);
     const blockSize = Math.floor(channelData.length / BARS);
     const heights: number[] = [];
@@ -90,7 +95,9 @@ const loadAudio = async () => {
     audio = new Audio(blobUrl);
     await new Promise<void>((resolve) => {
       audio!.addEventListener('loadedmetadata', () => {
-        duration.value = audio!.duration;
+        if (audio!.duration && isFinite(audio!.duration)) {
+          duration.value = audio!.duration;
+        }
         isLoaded.value = true;
         resolve();
       });

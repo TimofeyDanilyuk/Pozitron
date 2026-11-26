@@ -340,9 +340,22 @@ const selectedUserIds = ref<Set<string>>(new Set());
 const addingContacts = ref(false);
 
 const filteredAllUsers = computed(() => {
-  if (!contactSearch.value.trim()) return chat.allUsers;
-  return chat.allUsers.filter(u => u.username.toLowerCase().includes(contactSearch.value.toLowerCase()));
+  const contactNames = new Set(chat.contactChats.map(c => c.name?.toLowerCase()));
+  const available = chat.allUsers.filter(u =>
+    u.id !== auth.user?.id && !contactNames.has(u.username?.toLowerCase())
+  );
+  if (!contactSearch.value.trim()) return available;
+  return available.filter(u => u.username.toLowerCase().includes(contactSearch.value.toLowerCase()));
 });
+
+const parseLastMessage = (text?: string) => {
+  if (!text) return { icon: null as null | 'image' | 'video' | 'voice' | 'sticker', label: 'Нет сообщений' };
+  if (text.startsWith('📷')) return { icon: 'image' as const, label: text.replace(/^📷\s*/, '') || 'Фото' };
+  if (text.startsWith('🎬')) return { icon: 'video' as const, label: text.replace(/^🎬\s*/, '') || 'Видео' };
+  if (text.startsWith('🎤')) return { icon: 'voice' as const, label: text.replace(/^🎤\s*/, '') || 'Голосовое' };
+  if (text.startsWith('🎭')) return { icon: 'sticker' as const, label: text.replace(/^🎭\s*/, '') || 'Стикер' };
+  return { icon: null, label: text };
+};
 const openAddContacts = async () => {
   isAddContactsOpen.value = true;
   selectedUserIds.value = new Set();
@@ -545,17 +558,17 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         <span class="hidden sm:inline">Все диалоги</span>
       </button>
 
-      <!-- Лента живых чатов -->
+      <!-- Лента живых чатов (на мобильных скрыта, т.к. есть полноэкранный список) -->
       <div :class="[
-        'flex-1 flex gap-2 py-0.5',
+        'flex-1 hidden md:flex gap-2 py-0.5',
         chatListPosition === 'left'
-          ? 'items-center md:items-stretch overflow-x-auto md:overflow-x-hidden md:overflow-y-auto md:flex-col thin-scroll no-scrollbar'
+          ? 'items-stretch overflow-x-hidden overflow-y-auto flex-col thin-scroll no-scrollbar'
           : 'items-center overflow-x-auto no-scrollbar'
       ]">
         <div v-for="c in orderedChats" :key="c.id" @click="openChat(c)"
              :class="[
                'group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl cursor-pointer transition-all shrink-0 border',
-               chatListPosition === 'left' ? 'max-w-[210px] md:max-w-none md:w-full' : 'max-w-[210px]',
+               chatListPosition === 'left' ? 'w-full' : 'max-w-[210px]',
                chat.activeChat?.id === c.id
                  ? 'bg-[#3D7A5E]/[0.12] border-[#3D7A5E]/30'
                  : 'border-transparent hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
@@ -576,7 +589,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <p class="text-xs font-semibold truncate leading-tight">{{ c.name || 'Чат' }}</p>
               <BellOff v-if="isChatMuted(c.id)" class="w-3 h-3 text-slate-400 shrink-0" title="Уведомления отключены" />
             </div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate leading-tight">{{ c.lastMessage || 'Нет сообщений' }}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate leading-tight flex items-center gap-1">
+              <ImageIcon v-if="parseLastMessage(c.lastMessage).icon === 'image'" class="w-3 h-3 shrink-0" />
+              <Video v-else-if="parseLastMessage(c.lastMessage).icon === 'video'" class="w-3 h-3 shrink-0" />
+              <Mic v-else-if="parseLastMessage(c.lastMessage).icon === 'voice'" class="w-3 h-3 shrink-0" />
+              <Sticker v-else-if="parseLastMessage(c.lastMessage).icon === 'sticker'" class="w-3 h-3 shrink-0" />
+              <span class="truncate">{{ parseLastMessage(c.lastMessage).label }}</span>
+            </p>
           </div>
           <!-- Кнопки Pin и Split View при наведении -->
           <div class="hidden md:flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
@@ -922,9 +941,9 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </button>
 
             <textarea v-model="messageInput" @keydown="handleKeydown"
-                      :placeholder="chat.activeChat ? 'Напиши что-нибудь...' : 'Выберите чат...'"
+                      :placeholder="chat.activeChat ? 'Сообщение...' : 'Выберите чат...'"
                       :disabled="!chat.activeChat" rows="1"
-                      class="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 select-text disabled:opacity-40 resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
+                      class="flex-1 min-w-0 bg-transparent border-none px-2 py-2 outline-none text-sm leading-tight placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:truncate select-text disabled:opacity-40 resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
                       style="field-sizing: content;"></textarea>
 
             <button v-if="messageInput.trim()" @click="sendMessage" :disabled="!chat.activeChat"
