@@ -340,12 +340,14 @@ const selectedUserIds = ref<Set<string>>(new Set());
 const addingContacts = ref(false);
 
 const filteredAllUsers = computed(() => {
+  const q = contactSearch.value.trim().toLowerCase();
+  if (!q) return [];
   const contactNames = new Set(chat.contactChats.map(c => c.name?.toLowerCase()));
-  const available = chat.allUsers.filter(u =>
-    u.id !== auth.user?.id && !contactNames.has(u.username?.toLowerCase())
+  return chat.allUsers.filter(u =>
+    u.id !== auth.user?.id &&
+    !contactNames.has(u.username?.toLowerCase()) &&
+    u.username.toLowerCase().includes(q)
   );
-  if (!contactSearch.value.trim()) return available;
-  return available.filter(u => u.username.toLowerCase().includes(contactSearch.value.toLowerCase()));
 });
 
 const parseLastMessage = (text?: string) => {
@@ -1118,8 +1120,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <div class="px-4 pt-3">
             <input v-model="contactSearch" type="text" placeholder="Поиск..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-1 focus:ring-blue-500 select-text text-slate-900 dark:text-slate-100">
           </div>
-          <div class="max-h-64 overflow-y-auto p-2 mt-2">
-            <div v-if="chat.allUsers.length === 0" class="flex items-center justify-center py-8 opacity-30"><p class="text-sm">Загрузка...</p></div>
+          <div class="max-h-64 overflow-y-auto thin-scroll p-2 mt-2">
+            <div v-if="!contactSearch.trim()" class="flex items-center justify-center py-8 opacity-40">
+              <p class="text-xs">Введите никнейм для поиска</p>
+            </div>
+            <div v-else-if="filteredAllUsers.length === 0" class="flex items-center justify-center py-8 opacity-40">
+              <p class="text-xs">Никого не найдено</p>
+            </div>
             <div v-for="user in filteredAllUsers" :key="user.id" @click="toggleSelectUser(user.id)"
                  class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700">
               <img v-if="user.avatarUrl" :src="user.avatarUrl" class="w-10 h-10 rounded-xl object-cover shrink-0">
