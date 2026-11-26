@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pozitron-v1';
+const CACHE_NAME = 'pozitron-v2';
 
 // Статика которую кешируем при установке
 const STATIC_ASSETS = [
