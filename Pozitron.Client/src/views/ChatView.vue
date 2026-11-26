@@ -23,7 +23,7 @@ import {
   Columns2,
   Rows2,
   PanelTop,
-  PanelBottom,
+  PanelLeft,
   X,
   LayoutGrid,
   Sun,
@@ -68,15 +68,20 @@ const messagesLoading = ref(false);
 const uploadingAttachment = ref(false);
 
 // ===== НАСТРОЙКИ РАСКЛАДКИ И SPLIT VIEW =====
-const chatListPosition = ref<'top' | 'bottom'>((localStorage.getItem('chatListPosition') as 'top' | 'bottom') || 'top');
+const savedPos = localStorage.getItem('chatListPosition');
+const chatListPosition = ref<'top' | 'left'>(savedPos === 'left' ? 'left' : 'top');
 const isAllChatsOpen = ref(false);
 const splitChatId = ref<string | null>(null);
 const splitDirection = ref<'horizontal' | 'vertical'>((localStorage.getItem('splitDirection') as 'horizontal' | 'vertical') || 'horizontal');
 const splitMessageInput = ref('');
 const isMuted = ref(false);
+const isSplitMuted = ref(false);
+const isSplitEmojiPickerOpen = ref(false);
+const isSplitStickerPickerOpen = ref(false);
+const uploadingSplitAttachment = ref(false);
 
 const toggleChatListPosition = () => {
-  chatListPosition.value = chatListPosition.value === 'top' ? 'bottom' : 'top';
+  chatListPosition.value = chatListPosition.value === 'top' ? 'left' : 'top';
   localStorage.setItem('chatListPosition', chatListPosition.value);
 };
 
@@ -94,6 +99,8 @@ const openSplitChat = async (chatObj: any) => {
 const closeSplitChat = () => {
   splitChatId.value = null;
   splitMessageInput.value = '';
+  isSplitEmojiPickerOpen.value = false;
+  isSplitStickerPickerOpen.value = false;
 };
 
 const sendSplitMessage = async () => {
@@ -101,6 +108,46 @@ const sendSplitMessage = async () => {
   await chat.sendMessage(splitMessageInput.value, splitChatId.value);
   splitMessageInput.value = '';
 };
+
+const handleSplitKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendSplitMessage(); }
+};
+
+const handleSendSplitSticker = async (stickerId: string) => {
+  if (!splitChatId.value) return;
+  await chat.sendSticker(stickerId, splitChatId.value);
+  isSplitStickerPickerOpen.value = false;
+};
+
+const handleToggleSplitStickerPicker = async () => {
+  isSplitStickerPickerOpen.value = !isSplitStickerPickerOpen.value;
+  isSplitEmojiPickerOpen.value = false;
+  if (isSplitStickerPickerOpen.value && !chat.stickerPacksLoaded) await chat.loadMyPacks();
+};
+
+const triggerSplitAttachmentInput = () => document.getElementById('splitAttachmentInput')?.click();
+const onSplitAttachmentSelected = async (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (!target.files || !target.files[0] || !splitChatId.value) return;
+  uploadingSplitAttachment.value = true;
+  try {
+    await chat.uploadAttachment(target.files[0], splitChatId.value);
+  } catch { alert('Ошибка при загрузке файла'); }
+  finally { uploadingSplitAttachment.value = false; target.value = ''; }
+};
+
+const {
+  isRecording: isSplitRecording,
+  recordingDuration: splitRecordingDuration,
+  toggleRecording: toggleSplitRecording,
+  cancelRecording: cancelSplitRecording
+} = useVoiceRecorder(async (file) => {
+  if (!splitChatId.value) return;
+  uploadingSplitAttachment.value = true;
+  try {
+    await chat.uploadAttachment(file, splitChatId.value);
+  } finally { uploadingSplitAttachment.value = false; }
+});
 
 const splitChatObj = computed(() => chat.chats.find(c => c.id === splitChatId.value) || null);
 const splitMessages = computed(() => splitChatId.value ? (chat.messages[splitChatId.value] || []) : []);
@@ -407,37 +454,58 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
 <template>
   <div class="w-full h-full min-h-screen max-w-[1920px] mx-auto p-2 sm:p-3 flex gap-2.5 text-slate-900 dark:text-slate-100 overflow-hidden font-sans select-none transition-colors duration-300 relative"
-       :class="chatListPosition === 'bottom' ? 'flex-col-reverse' : 'flex-col'">
+       :class="chatListPosition === 'left' ? 'flex-col md:flex-row' : 'flex-col'">
     <div class="ambient-canvas"></div>
 
-    <!-- ===== ВЕРХНЯЯ / НИЖНЯЯ ЛЕНТА ЧАТОВ ===== -->
-    <header class="surface-strip rounded-2xl w-full px-3 py-2 flex items-center gap-2.5 z-20 shrink-0">
+    <!-- ===== ВЕРХНЯЯ / ЛЕВАЯ ЛЕНТА ЧАТОВ ===== -->
+    <header :class="[
+      'surface-strip rounded-2xl flex gap-2.5 z-20 shrink-0',
+      chatListPosition === 'left'
+        ? 'w-full md:w-64 md:h-full md:flex-col px-3 py-2 md:py-3 md:px-2.5 items-center md:items-stretch'
+        : 'w-full px-3 py-2 flex-row items-center'
+    ]">
       <!-- Логотип -->
-      <div class="flex items-center gap-2 pr-2 border-r border-slate-200 dark:border-white/[0.08] shrink-0">
-        <div class="w-8 h-8 text-[#3D7A5E] flex items-center justify-center">
-          <svg viewBox="0 0 48 48" fill="none" class="w-7 h-7">
-            <rect x="2" y="2" width="44" height="44" rx="12" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.5" />
-            <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(-40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5" />
-            <circle cx="24" cy="24" r="3.5" fill="currentColor" />
-            <circle cx="34.5" cy="15.5" r="2" fill="currentColor" />
-          </svg>
+      <div :class="[
+        'flex items-center gap-2 shrink-0',
+        chatListPosition === 'left'
+          ? 'pr-2 border-r md:pr-0 md:border-r-0 md:pb-2 md:border-b border-slate-200 dark:border-white/[0.08] md:justify-between'
+          : 'pr-2 border-r border-slate-200 dark:border-white/[0.08]'
+      ]">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 text-[#3D7A5E] flex items-center justify-center">
+            <svg viewBox="0 0 48 48" fill="none" class="w-7 h-7">
+              <rect x="2" y="2" width="44" height="44" rx="12" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.5" />
+              <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(-40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5" />
+              <circle cx="24" cy="24" r="3.5" fill="currentColor" />
+              <circle cx="34.5" cy="15.5" r="2" fill="currentColor" />
+            </svg>
+          </div>
+          <span class="hidden sm:inline font-bold text-sm tracking-tight">Pozitron</span>
         </div>
-        <span class="hidden sm:inline font-bold text-sm tracking-tight">Pozitron</span>
       </div>
 
       <!-- Кнопка "Все диалоги" -->
       <button @click="isAllChatsOpen = true"
-        class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs font-medium transition-colors shrink-0">
+        :class="[
+          'flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs font-medium transition-colors shrink-0',
+          chatListPosition === 'left' ? 'md:w-full md:justify-center' : ''
+        ]">
         <LayoutGrid class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
         <span class="hidden sm:inline">Все диалоги</span>
       </button>
 
-      <!-- Горизонтальная лента живых чатов -->
-      <div class="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+      <!-- Лента живых чатов -->
+      <div :class="[
+        'flex-1 flex gap-2 py-0.5',
+        chatListPosition === 'left'
+          ? 'items-center md:items-stretch overflow-x-auto md:overflow-x-hidden md:overflow-y-auto md:flex-col thin-scroll no-scrollbar'
+          : 'items-center overflow-x-auto no-scrollbar'
+      ]">
         <div v-for="c in [...chat.contactChats, ...chat.otherChats]" :key="c.id" @click="openChat(c)"
              :class="[
-               'group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl cursor-pointer transition-all shrink-0 max-w-[210px] border',
+               'group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl cursor-pointer transition-all shrink-0 border',
+               chatListPosition === 'left' ? 'max-w-[210px] md:max-w-none md:w-full' : 'max-w-[210px]',
                chat.activeChat?.id === c.id
                  ? 'bg-[#3D7A5E]/[0.12] border-[#3D7A5E]/30'
                  : 'border-transparent hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
@@ -464,11 +532,16 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </div>
       </div>
 
-      <!-- Правые контролы -->
-      <div class="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-white/[0.08] shrink-0">
-        <button @click="toggleChatListPosition" :title="chatListPosition === 'top' ? 'Переместить панель вниз' : 'Переместить панель наверх'"
-          class="w-8 h-8 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
-          <PanelBottom v-if="chatListPosition === 'top'" class="w-4 h-4" />
+      <!-- Правые / нижние контролы -->
+      <div :class="[
+        'flex items-center gap-1.5 shrink-0',
+        chatListPosition === 'left'
+          ? 'pl-2 border-l md:pl-0 md:border-l-0 md:pt-2 md:border-t border-slate-200 dark:border-white/[0.08] md:justify-between'
+          : 'pl-2 border-l border-slate-200 dark:border-white/[0.08]'
+      ]">
+        <button @click="toggleChatListPosition" :title="chatListPosition === 'top' ? 'Закрепить панель слева' : 'Закрепить панель сверху'"
+          class="hidden md:flex w-8 h-8 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.06] items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
+          <PanelLeft v-if="chatListPosition === 'top'" class="w-4 h-4" />
           <PanelTop v-else class="w-4 h-4" />
         </button>
         <button @click="toggleTheme" :title="isDark ? 'Светлая тема' : 'Тёмная тема'"
@@ -820,32 +893,103 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </button>
         </div>
       </header>
-      <div class="flex-1 px-3 py-4 overflow-y-auto thin-scroll space-y-3 select-text">
+      <div class="flex-1 px-3 sm:px-5 py-4 overflow-y-auto thin-scroll space-y-3 select-text">
         <div v-if="splitMessages.length === 0" class="flex justify-center pt-10 opacity-30">
           <p class="text-sm italic">Сообщений пока нет</p>
         </div>
-        <div v-for="msg in splitMessages" :key="msg.id" :class="['flex items-end gap-2', msg.userId === auth.user?.id ? 'justify-end' : 'justify-start']">
-          <MessageBubble
-            :msg="msg"
-            :is-own="msg.userId === auth.user?.id"
-            :on-sticker-click="onStickerClick"
-            :on-reply="(m: any) => chat.setReply(m)"
-            :on-react="() => {}"
-            :scroll-to-message="() => {}"
-            :add-reaction="(id: string, emoji: string) => chat.addReaction(id, emoji)"
-            :current-user-id="auth.user?.id || ''"
-          />
+        <div v-for="msg in splitMessages" :key="msg.id"
+             :class="['flex gap-2 items-end transition-colors rounded-xl px-1', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+          <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
+          <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ msg.username?.[0]?.toUpperCase() }}</div>
+          <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
+            <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ msg.emojiPrefix }} {{ msg.username }} · {{ formatTime(msg.sentAt) }}</span>
+            <MessageBubble
+              :msg="msg"
+              :is-own="msg.userId === auth.user?.id"
+              :on-sticker-click="onStickerClick"
+              :on-reply="(m: any) => chat.setReply(m)"
+              :on-react="() => {}"
+              :scroll-to-message="() => {}"
+              :add-reaction="(id: string, emoji: string) => chat.addReaction(id, emoji)"
+              :current-user-id="auth.user?.id || ''"
+            />
+          </div>
         </div>
       </div>
-      <!-- Мини-композер второго чата -->
-      <footer class="p-2.5 border-t border-slate-200/80 dark:border-white/[0.06] shrink-0">
-        <div class="surface-composer flex items-center gap-2 p-1.5 rounded-xl">
-          <input v-model="splitMessageInput" @keydown.enter.prevent="sendSplitMessage" type="text" placeholder="Написать во второй чат..."
-                 class="flex-1 bg-transparent border-none px-2.5 py-1.5 outline-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 select-text text-slate-900 dark:text-slate-100">
-          <button @click="sendSplitMessage" :disabled="!splitMessageInput.trim()"
-                  class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
-            <Send class="w-4 h-4" />
-          </button>
+      <!-- Полноценный остров ввода второго чата -->
+      <footer class="px-3 pb-3 pt-1 z-10 shrink-0 relative">
+        <div class="relative">
+          <Transition name="picker">
+            <StickerPicker v-if="isSplitStickerPickerOpen" @send-sticker="handleSendSplitSticker" @close="isSplitStickerPickerOpen = false" />
+          </Transition>
+          <Transition name="picker">
+            <EmojiPicker v-if="isSplitEmojiPickerOpen" class="mb-2" @select="(e) => { splitMessageInput += e; isSplitEmojiPickerOpen = false; }" />
+          </Transition>
+
+          <!-- Режим записи голосового во втором чате -->
+          <div v-if="isSplitRecording" class="surface-composer rounded-2xl p-2 flex items-center gap-3">
+            <button @click="cancelSplitRecording" title="Отменить запись"
+                    class="p-2 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors shrink-0">
+              <Trash2 class="w-5 h-5" />
+            </button>
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0"></span>
+              <span class="text-xs font-mono font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ formatDuration(splitRecordingDuration) }}</span>
+              <div class="flex items-center gap-1 flex-1 h-6 overflow-hidden px-2">
+                <span v-for="i in 12" :key="i" class="rec-wave-bar w-1 bg-[#3D7A5E] rounded-full" :style="{ animationDelay: `${(i % 5) * 0.12}s` }"></span>
+              </div>
+            </div>
+            <button @click="toggleSplitRecording" title="Отправить голосовое"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0">
+              <Send class="w-5 h-5" />
+            </button>
+          </div>
+
+          <!-- Обычный режим ввода во втором чате -->
+          <div v-else class="surface-composer flex items-end gap-1.5 p-1.5 rounded-2xl transition-all">
+            <button @click="triggerSplitAttachmentInput" :disabled="uploadingSplitAttachment"
+                    class="p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5 hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400">
+              <div v-if="uploadingSplitAttachment" class="w-5 h-5 flex items-center justify-center">
+                <div class="w-4 h-4 border-2 border-[#3D7A5E] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <Paperclip v-else class="w-5 h-5 text-[#3D7A5E]" />
+            </button>
+            <input id="splitAttachmentInput" type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" @change="onSplitAttachmentSelected">
+
+            <button @click.stop="handleToggleSplitStickerPicker"
+                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+                      isSplitStickerPickerOpen ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
+              <Sticker class="w-5 h-5" />
+            </button>
+
+            <button @click.stop="isSplitEmojiPickerOpen = !isSplitEmojiPickerOpen; isSplitStickerPickerOpen = false"
+                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+                      isSplitEmojiPickerOpen ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
+              <Smile class="w-5 h-5" />
+            </button>
+
+            <button @click="isSplitMuted = !isSplitMuted" :title="isSplitMuted ? 'Отправлять со звуком' : 'Отправлять без звука'"
+                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+                      isSplitMuted ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
+              <BellOff v-if="isSplitMuted" class="w-5 h-5" />
+              <Bell v-else class="w-5 h-5" />
+            </button>
+
+            <textarea v-model="splitMessageInput" @keydown="handleSplitKeydown"
+                      placeholder="Написать во второй чат..." rows="1"
+                      class="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 select-text resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
+                      style="field-sizing: content;"></textarea>
+
+            <button v-if="splitMessageInput.trim()" @click="sendSplitMessage"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end">
+              <Send class="w-5 h-5" />
+            </button>
+
+            <button v-else @click="toggleSplitRecording"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] p-2.5 rounded-xl text-white transition-colors shrink-0 self-end">
+              <Mic class="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </footer>
     </section>

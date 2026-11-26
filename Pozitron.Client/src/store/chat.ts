@@ -205,16 +205,26 @@ export const useChatStore = defineStore('chat', {
       await api.post(`/chat/${chat.id}/read`).catch(() => {});
     },
 
-    async sendMessage(content: string) {
-      if (!this.activeChat || !content.trim()) return;
+    async loadChatMessages(chatId: string) {
+      if (!this.messages[chatId]) {
+        const { data } = await api.get(`/chat/${chatId}/messages`);
+        this.messages[chatId] = data;
+      }
+      return this.messages[chatId];
+    },
+
+    async sendMessage(content: string, targetChatId?: string) {
+      const chatId = targetChatId || this.activeChat?.id;
+      if (!chatId || !content.trim()) return;
       const replyId = this.replyingTo?.id ?? null;
-      await this.connection?.invoke('SendMessage', this.activeChat.id, content, replyId);
+      await this.connection?.invoke('SendMessage', chatId, content, replyId);
       this.replyingTo = null;
     },
 
-    async sendSticker(stickerId: string) {
-      if (!this.activeChat) return;
-      await this.connection?.invoke('SendSticker', this.activeChat.id, stickerId);
+    async sendSticker(stickerId: string, targetChatId?: string) {
+      const chatId = targetChatId || this.activeChat?.id;
+      if (!chatId) return;
+      await this.connection?.invoke('SendSticker', chatId, stickerId);
     },
 
     setReply(message: Message | null) {
@@ -302,14 +312,15 @@ export const useChatStore = defineStore('chat', {
       if (chat) await this.openChat(chat);
     },
 
-    async uploadAttachment(file: File) {
-      if (!this.activeChat) return;
+    async uploadAttachment(file: File, targetChatId?: string) {
+      const chatId = targetChatId || this.activeChat?.id;
+      if (!chatId) return;
       const formData = new FormData();
       formData.append('file', file);
       if (this.replyingTo) {
         formData.append('replyToMessageId', this.replyingTo.id);
       }
-      await api.post(`/chat/${this.activeChat.id}/upload`, formData, {
+      await api.post(`/chat/${chatId}/upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       this.replyingTo = null;
