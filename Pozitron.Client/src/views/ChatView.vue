@@ -77,6 +77,24 @@ const isSplitEmojiPickerOpen = ref(false);
 const isSplitStickerPickerOpen = ref(false);
 const uploadingSplitAttachment = ref(false);
 
+// ===== ЗАКРЕПЛЕНИЕ ЧАТОВ (PIN) =====
+const pinnedChats = ref<Set<string>>(new Set(JSON.parse(localStorage.getItem('pinnedChats') || '[]')));
+const isChatPinned = (chatId?: string | null) => !!chatId && pinnedChats.value.has(chatId);
+const toggleChatPin = (chatId?: string | null) => {
+  if (!chatId) return;
+  if (pinnedChats.value.has(chatId)) pinnedChats.value.delete(chatId);
+  else pinnedChats.value.add(chatId);
+  pinnedChats.value = new Set(pinnedChats.value);
+  localStorage.setItem('pinnedChats', JSON.stringify([...pinnedChats.value]));
+};
+const orderedChats = computed(() => {
+  const all = [...chat.contactChats, ...chat.otherChats];
+  return [
+    ...all.filter(c => isChatPinned(c.id)),
+    ...all.filter(c => !isChatPinned(c.id))
+  ];
+});
+
 // ===== УВЕДОМЛЕНИЯ (MUTE ПО ЧАТАМ) =====
 const mutedChats = ref<Set<string>>(new Set(JSON.parse(localStorage.getItem('mutedChats') || '[]')));
 const isChatMuted = (chatId?: string | null) => !!chatId && mutedChats.value.has(chatId);
@@ -538,7 +556,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           ? 'items-center md:items-stretch overflow-x-auto md:overflow-x-hidden md:overflow-y-auto md:flex-col thin-scroll no-scrollbar'
           : 'items-center overflow-x-auto no-scrollbar'
       ]">
-        <div v-for="c in [...chat.contactChats, ...chat.otherChats]" :key="c.id" @click="openChat(c)"
+        <div v-for="c in orderedChats" :key="c.id" @click="openChat(c)"
              :class="[
                'group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl cursor-pointer transition-all shrink-0 border',
                chatListPosition === 'left' ? 'max-w-[210px] md:max-w-none md:w-full' : 'max-w-[210px]',
@@ -558,16 +576,23 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </div>
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1">
+              <Pin v-if="isChatPinned(c.id)" class="w-3 h-3 text-[#3D7A5E] shrink-0" />
               <p class="text-xs font-semibold truncate leading-tight">{{ c.name || 'Чат' }}</p>
               <BellOff v-if="isChatMuted(c.id)" class="w-3 h-3 text-slate-400 shrink-0" title="Уведомления отключены" />
             </div>
             <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate leading-tight">{{ c.lastMessage || 'Нет сообщений' }}</p>
           </div>
-          <!-- Кнопка Split View при наведении -->
-          <button v-if="chat.activeChat && chat.activeChat.id !== c.id" @click.stop="openSplitChat(c)" title="Открыть в Split View"
-            class="hidden md:flex opacity-0 group-hover:opacity-100 w-6 h-6 rounded-lg bg-white/80 dark:bg-black/40 hover:text-[#3D7A5E] items-center justify-center text-slate-400 transition-all shrink-0">
-            <Columns2 class="w-3.5 h-3.5" />
-          </button>
+          <!-- Кнопки Pin и Split View при наведении -->
+          <div class="hidden md:flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+            <button @click.stop="toggleChatPin(c.id)" :title="isChatPinned(c.id) ? 'Открепить чат' : 'Закрепить чат'"
+              :class="['w-6 h-6 rounded-lg bg-white/80 dark:bg-black/40 flex items-center justify-center transition-colors', isChatPinned(c.id) ? 'text-[#3D7A5E]' : 'text-slate-400 hover:text-[#3D7A5E]']">
+              <Pin class="w-3.5 h-3.5" />
+            </button>
+            <button v-if="chat.activeChat && chat.activeChat.id !== c.id" @click.stop="openSplitChat(c)" title="Открыть в Split View"
+              class="w-6 h-6 rounded-lg bg-white/80 dark:bg-black/40 hover:text-[#3D7A5E] flex items-center justify-center text-slate-400 transition-colors">
+              <Columns2 class="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
