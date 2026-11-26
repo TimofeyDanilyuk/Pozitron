@@ -689,7 +689,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
-              <p class="text-xs text-slate-400 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+              <p class="text-xs text-slate-400 truncate flex items-center gap-1">
+                <ImageIcon v-if="parseLastMessage(c.lastMessage).icon === 'image'" class="w-3 h-3 shrink-0" />
+                <Video v-else-if="parseLastMessage(c.lastMessage).icon === 'video'" class="w-3 h-3 shrink-0" />
+                <Mic v-else-if="parseLastMessage(c.lastMessage).icon === 'voice'" class="w-3 h-3 shrink-0" />
+                <Sticker v-else-if="parseLastMessage(c.lastMessage).icon === 'sticker'" class="w-3 h-3 shrink-0" />
+                <span class="truncate">{{ parseLastMessage(c.lastMessage).label }}</span>
+              </p>
             </div>
             <button v-if="chat.activeChat && chat.activeChat.id !== c.id" @click.stop="openSplitChat(c); isAllChatsOpen = false" title="Split View"
               class="hidden md:flex w-7 h-7 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 items-center justify-center text-slate-400 hover:text-[#3D7A5E]">
@@ -705,7 +711,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
-              <p class="text-xs text-slate-400 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+              <p class="text-xs text-slate-400 truncate flex items-center gap-1">
+                <ImageIcon v-if="parseLastMessage(c.lastMessage).icon === 'image'" class="w-3 h-3 shrink-0" />
+                <Video v-else-if="parseLastMessage(c.lastMessage).icon === 'video'" class="w-3 h-3 shrink-0" />
+                <Mic v-else-if="parseLastMessage(c.lastMessage).icon === 'voice'" class="w-3 h-3 shrink-0" />
+                <Sticker v-else-if="parseLastMessage(c.lastMessage).icon === 'sticker'" class="w-3 h-3 shrink-0" />
+                <span class="truncate">{{ parseLastMessage(c.lastMessage).label }}</span>
+              </p>
             </div>
             <button v-if="chat.activeChat && chat.activeChat.id !== c.id" @click.stop="openSplitChat(c); isAllChatsOpen = false" title="Split View"
               class="hidden md:flex w-7 h-7 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 items-center justify-center text-slate-400 hover:text-[#3D7A5E]">
