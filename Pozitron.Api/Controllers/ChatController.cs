@@ -39,6 +39,7 @@ public class ChatController : ControllerBase
                 Type = cm.Chat.Type,
                 Name = cm.Chat.Name,
                 UnreadCount = cm.UnreadCount,
+                IsPinned = cm.IsPinned,
                 LastMessage = cm.Chat.Messages
                     .OrderByDescending(m => m.SentAt)
                     .Select(m => m.Content)
@@ -64,6 +65,7 @@ public class ChatController : ControllerBase
                     .Select(m => m.User!.AvatarUrl)
                     .FirstOrDefault(),
                 UnreadCount = cm.UnreadCount,
+                IsPinned = cm.IsPinned,
                 LastMessage = cm.Chat.Messages
                     .OrderByDescending(m => m.SentAt)
                     .Select(m => m.Content)
@@ -259,6 +261,18 @@ public class ChatController : ControllerBase
         return Ok();
     }
 
+    [HttpPost("{chatId}/pin")]
+    public async Task<IActionResult> TogglePinChat(Guid chatId)
+    {
+        var member = await _context.ChatMembers
+            .FirstOrDefaultAsync(cm => cm.ChatId == chatId && cm.UserId == CurrentUserId);
+        if (member == null) return NotFound();
+
+        member.IsPinned = !member.IsPinned;
+        await _context.SaveChangesAsync();
+        return Ok(new { isPinned = member.IsPinned });
+    }
+
     [HttpPost("{chatId}/messages/{messageId}/pin")]
     public async Task<IActionResult> TogglePinMessage(Guid chatId, Guid messageId)
     {
@@ -439,6 +453,7 @@ public record ChatDto
     public string? Name { get; set; }
     public string? AvatarUrl { get; set; }
     public int UnreadCount { get; set; }
+    public bool IsPinned { get; set; }
     public string? LastMessage { get; set; }
     public bool IsContact { get; set; }
 }

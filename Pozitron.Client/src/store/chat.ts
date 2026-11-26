@@ -36,6 +36,7 @@ export interface Chat {
   avatarUrl?: string;
   lastMessage?: string;
   unreadCount: number;
+  isPinned?: boolean;
   isContact?: boolean;
 }
 
@@ -346,6 +347,12 @@ export const useChatStore = defineStore('chat', {
       const chatId = targetChatId || this.activeChat?.id;
       if (!chatId) return;
       await api.post(`/chat/${chatId}/messages/${messageId}/pin`);
+    },
+
+    async togglePinChat(chatId: string) {
+      const { data } = await api.post(`/chat/${chatId}/pin`);
+      const c = this.chats.find(x => x.id === chatId);
+      if (c) c.isPinned = data.isPinned;
     },
   }
 });

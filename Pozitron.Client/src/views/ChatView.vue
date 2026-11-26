@@ -78,20 +78,16 @@ const isSplitStickerPickerOpen = ref(false);
 const uploadingSplitAttachment = ref(false);
 
 // ===== ЗАКРЕПЛЕНИЕ ЧАТОВ (PIN) =====
-const pinnedChats = ref<Set<string>>(new Set(JSON.parse(localStorage.getItem('pinnedChats') || '[]')));
-const isChatPinned = (chatId?: string | null) => !!chatId && pinnedChats.value.has(chatId);
-const toggleChatPin = (chatId?: string | null) => {
+const isChatPinned = (chatId?: string | null) => !!chatId && !!chat.chats.find(c => c.id === chatId)?.isPinned;
+const toggleChatPin = async (chatId?: string | null) => {
   if (!chatId) return;
-  if (pinnedChats.value.has(chatId)) pinnedChats.value.delete(chatId);
-  else pinnedChats.value.add(chatId);
-  pinnedChats.value = new Set(pinnedChats.value);
-  localStorage.setItem('pinnedChats', JSON.stringify([...pinnedChats.value]));
+  await chat.togglePinChat(chatId);
 };
 const orderedChats = computed(() => {
   const all = [...chat.contactChats, ...chat.otherChats];
   return [
-    ...all.filter(c => isChatPinned(c.id)),
-    ...all.filter(c => !isChatPinned(c.id))
+    ...all.filter(c => c.isPinned),
+    ...all.filter(c => !c.isPinned)
   ];
 });
 

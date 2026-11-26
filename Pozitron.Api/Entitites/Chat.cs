@@ -19,6 +19,7 @@ public class ChatMember
     public Guid UserId { get; set; }
     public User? User { get; set; }
     public int UnreadCount { get; set; } = 0;
+    public bool IsPinned { get; set; } = false;
 }
 
 public enum ChatType
