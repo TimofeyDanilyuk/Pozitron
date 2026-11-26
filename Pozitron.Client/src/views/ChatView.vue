@@ -34,9 +34,7 @@ import {
   Bell,
   BellOff,
   Trash2,
-  Pin,
   FileText,
-  Phone,
   ArrowDown
 } from 'lucide-vue-next';
 
@@ -74,11 +72,34 @@ const isAllChatsOpen = ref(false);
 const splitChatId = ref<string | null>(null);
 const splitDirection = ref<'horizontal' | 'vertical'>((localStorage.getItem('splitDirection') as 'horizontal' | 'vertical') || 'horizontal');
 const splitMessageInput = ref('');
-const isMuted = ref(false);
-const isSplitMuted = ref(false);
 const isSplitEmojiPickerOpen = ref(false);
 const isSplitStickerPickerOpen = ref(false);
 const uploadingSplitAttachment = ref(false);
+
+// ===== УВЕДОМЛЕНИЯ (MUTE ПО ЧАТАМ) =====
+const mutedChats = ref<Set<string>>(new Set(JSON.parse(localStorage.getItem('mutedChats') || '[]')));
+const isChatMuted = (chatId?: string | null) => !!chatId && mutedChats.value.has(chatId);
+const toggleChatMute = (chatId?: string | null) => {
+  if (!chatId) return;
+  if (mutedChats.value.has(chatId)) mutedChats.value.delete(chatId);
+  else mutedChats.value.add(chatId);
+  mutedChats.value = new Set(mutedChats.value);
+  localStorage.setItem('mutedChats', JSON.stringify([...mutedChats.value]));
+};
+
+// ===== МОДАЛКА МЕДИА И ФАЙЛОВ =====
+const attachmentsModal = ref<{ chatId: string; chatName: string; tab: 'media' | 'files' } | null>(null);
+const openAttachmentsModal = (chatId: string, chatName: string, tab: 'media' | 'files') => {
+  attachmentsModal.value = { chatId, chatName, tab };
+};
+const modalAttachmentMessages = computed(() => {
+  if (!attachmentsModal.value) return [];
+  const msgs = chat.messages[attachmentsModal.value.chatId] || [];
+  if (attachmentsModal.value.tab === 'media') {
+    return msgs.filter(m => m.type === 'Image' || m.type === 'Video');
+  }
+  return msgs.filter(m => m.attachmentUrl && m.type !== 'Image' && m.type !== 'Video' && m.type !== 'Voice');
+});
 
 const toggleChatListPosition = () => {
   chatListPosition.value = chatListPosition.value === 'top' ? 'left' : 'top';
@@ -521,7 +542,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </span>
           </div>
           <div class="min-w-0 flex-1">
-            <p class="text-xs font-semibold truncate leading-tight">{{ c.name || 'Чат' }}</p>
+            <div class="flex items-center gap-1">
+              <p class="text-xs font-semibold truncate leading-tight">{{ c.name || 'Чат' }}</p>
+              <BellOff v-if="isChatMuted(c.id)" class="w-3 h-3 text-slate-400 shrink-0" title="Уведомления отключены" />
+            </div>
             <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate leading-tight">{{ c.lastMessage || 'Нет сообщений' }}</p>
           </div>
           <!-- Кнопка Split View при наведении -->
@@ -654,19 +678,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </div>
         </div>
         <div v-if="chat.activeChat" class="flex items-center gap-1.5">
-          <button title="Медиа" class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
+          <button @click="openAttachmentsModal(chat.activeChat.id, chat.activeChat.name || 'Чат', 'media')" title="Медиа" class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
             <ImageIcon class="w-3.5 h-3.5" />
             <span>Медиа</span>
           </button>
-          <button title="Файлы" class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
+          <button @click="openAttachmentsModal(chat.activeChat.id, chat.activeChat.name || 'Чат', 'files')" title="Файлы" class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
             <FileText class="w-3.5 h-3.5" />
             <span>Файлы</span>
-          </button>
-          <button title="Закреплённые" class="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
-            <Pin class="w-3.5 h-3.5" />
-          </button>
-          <button title="Звонок" class="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#3D7A5E]/15 hover:bg-[#3D7A5E]/25 text-xs text-[#3D7A5E] transition-colors">
-            <Phone class="w-3.5 h-3.5" />
           </button>
           <button @click="chat.activeChat = null; mobileView = 'list'" title="Закрыть чат"
             class="w-8 h-8 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
@@ -844,10 +862,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <Smile class="w-5 h-5" />
             </button>
 
-            <button @click="isMuted = !isMuted" :title="isMuted ? 'Отправлять со звуком' : 'Отправлять без звука'"
+            <button @click="toggleChatMute(chat.activeChat?.id)" :disabled="!chat.activeChat"
+                    :title="isChatMuted(chat.activeChat?.id) ? 'Включить уведомления' : 'Отключить уведомления'"
                     :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
-                      isMuted ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
-              <BellOff v-if="isMuted" class="w-5 h-5" />
+                      isChatMuted(chat.activeChat?.id) ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400',
+                      !chat.activeChat ? 'opacity-40 cursor-not-allowed' : '']">
+              <BellOff v-if="isChatMuted(chat.activeChat?.id)" class="w-5 h-5" />
               <Bell v-else class="w-5 h-5" />
             </button>
 
@@ -882,6 +902,14 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <p class="font-bold text-sm truncate">{{ splitChatObj.name || 'Чат' }}</p>
         </div>
         <div class="flex items-center gap-1.5">
+          <button @click="openAttachmentsModal(splitChatObj.id, splitChatObj.name || 'Чат', 'media')" title="Медиа"
+            class="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
+            <ImageIcon class="w-3.5 h-3.5" />
+          </button>
+          <button @click="openAttachmentsModal(splitChatObj.id, splitChatObj.name || 'Чат', 'files')" title="Файлы"
+            class="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
+            <FileText class="w-3.5 h-3.5" />
+          </button>
           <button @click="toggleSplitDirection" :title="splitDirection === 'horizontal' ? 'Расположить друг над другом' : 'Расположить рядом'"
             class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
             <Rows2 v-if="splitDirection === 'horizontal'" class="w-4 h-4" />
@@ -968,10 +996,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <Smile class="w-5 h-5" />
             </button>
 
-            <button @click="isSplitMuted = !isSplitMuted" :title="isSplitMuted ? 'Отправлять со звуком' : 'Отправлять без звука'"
+            <button @click="toggleChatMute(splitChatId)" :title="isChatMuted(splitChatId) ? 'Включить уведомления' : 'Отключить уведомления'"
                     :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
-                      isSplitMuted ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
-              <BellOff v-if="isSplitMuted" class="w-5 h-5" />
+                      isChatMuted(splitChatId) ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
+              <BellOff v-if="isChatMuted(splitChatId)" class="w-5 h-5" />
               <Bell v-else class="w-5 h-5" />
             </button>
 
@@ -1169,6 +1197,56 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                   class="w-10 h-10 flex items-center justify-center rounded-xl text-xl hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-90 transition-all">
             {{ emoji }}
           </button>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- МОДАЛКА МЕДИА И ФАЙЛОВ -->
+    <Transition name="fade">
+      <div v-if="attachmentsModal" @click="attachmentsModal = null" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div @click.stop class="surface-sheet rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden">
+          <div class="p-4 border-b border-slate-200/80 dark:border-white/[0.08] flex items-center justify-between">
+            <div>
+              <h3 class="font-semibold text-sm">{{ attachmentsModal.chatName }}</h3>
+              <div class="flex gap-2 mt-2">
+                <button @click="attachmentsModal.tab = 'media'"
+                        :class="['px-3 py-1 rounded-lg text-xs font-medium transition-colors', attachmentsModal.tab === 'media' ? 'bg-[#3D7A5E] text-white' : 'bg-black/[0.04] dark:bg-white/[0.05] text-slate-500']">
+                  Медиа
+                </button>
+                <button @click="attachmentsModal.tab = 'files'"
+                        :class="['px-3 py-1 rounded-lg text-xs font-medium transition-colors', attachmentsModal.tab === 'files' ? 'bg-[#3D7A5E] text-white' : 'bg-black/[0.04] dark:bg-white/[0.05] text-slate-500']">
+                  Файлы
+                </button>
+              </div>
+            </div>
+            <button @click="attachmentsModal = null" class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto thin-scroll p-3">
+            <div v-if="modalAttachmentMessages.length === 0" class="py-12 text-center text-xs text-slate-400">
+              {{ attachmentsModal.tab === 'media' ? 'В этом чате пока нет фото и видео' : 'В этом чате пока нет файлов' }}
+            </div>
+            <div v-else-if="attachmentsModal.tab === 'media'" class="grid grid-cols-3 gap-2">
+              <div v-for="m in modalAttachmentMessages" :key="m.id" @click="scrollToMessage(m.id); attachmentsModal = null"
+                   class="aspect-square rounded-xl overflow-hidden bg-black/10 cursor-pointer hover:opacity-85 transition-opacity">
+                <img v-if="m.type === 'Image' && m.attachmentUrl" :src="m.attachmentUrl" class="w-full h-full object-cover">
+                <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
+                  <Video class="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+            <div v-else class="space-y-2">
+              <div v-for="m in modalAttachmentMessages" :key="m.id" @click="scrollToMessage(m.id); attachmentsModal = null"
+                   class="flex items-center gap-3 p-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] hover:bg-black/[0.06] cursor-pointer">
+                <FileText class="w-5 h-5 text-[#3D7A5E] shrink-0" />
+                <div class="min-w-0 flex-1">
+                  <p class="text-xs font-medium truncate">{{ m.content || 'Файл' }}</p>
+                  <p class="text-[10px] text-slate-400">{{ m.username }} · {{ formatTime(m.sentAt) }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </Transition>
