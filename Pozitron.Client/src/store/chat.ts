@@ -78,7 +78,7 @@ export const useChatStore = defineStore('chat', {
       const token = auth.token;
 
       this.connection = new signalR.HubConnectionBuilder()
-        .withUrl('http://localhost:5088/hubs/chat', {
+        .withUrl('/hubs/chat', {
           accessTokenFactory: () => token
         })
         .withAutomaticReconnect()
