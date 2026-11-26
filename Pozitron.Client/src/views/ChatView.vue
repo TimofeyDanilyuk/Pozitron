@@ -35,6 +35,7 @@ import {
   BellOff,
   Trash2,
   FileText,
+  Pin,
   ArrowDown
 } from 'lucide-vue-next';
 
@@ -251,6 +252,20 @@ const onSelectFromMenu = () => {
   selectedMessages.value = new Set([msgId]);
   closeContextMenu();
 };
+const onPinFromMenu = async () => {
+  if (!contextMenu.value) return;
+  const msg = contextMenu.value.msg;
+  closeContextMenu();
+  await chat.togglePinMessage(msg.id, msg.chatId);
+};
+const latestPinnedMain = computed(() => {
+  const pinned = currentMessages.value.filter(m => m.isPinned);
+  return pinned.length > 0 ? pinned[pinned.length - 1] : null;
+});
+const latestPinnedSplit = computed(() => {
+  const pinned = splitMessages.value.filter(m => m.isPinned);
+  return pinned.length > 0 ? pinned[pinned.length - 1] : null;
+});
 const stickerPackModal = ref<null | { id: string, name: string, coverUrl?: string, stickers: any[], isAdded: boolean, createdBy: string }>(null);
 const stickerPackModalLoading = ref(false);
 
@@ -693,6 +708,20 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </div>
       </header>
 
+      <!-- Полоска закреплённого сообщения -->
+      <div v-if="latestPinnedMain" @click="scrollToMessage(latestPinnedMain.id)"
+           class="px-4 py-2 border-b border-slate-200/70 dark:border-white/[0.06] bg-[#3D7A5E]/[0.06] flex items-center gap-2.5 cursor-pointer hover:bg-[#3D7A5E]/[0.1] transition-colors shrink-0">
+        <Pin class="w-3.5 h-3.5 text-[#3D7A5E] shrink-0" />
+        <div class="min-w-0 flex-1">
+          <p class="text-[11px] font-semibold text-[#3D7A5E] leading-tight">Закреплённое сообщение</p>
+          <p class="text-xs text-slate-600 dark:text-slate-300 truncate leading-tight">{{ latestPinnedMain.content || 'Вложение' }}</p>
+        </div>
+        <button @click.stop="chat.togglePinMessage(latestPinnedMain.id, chat.activeChat?.id)" title="Открепить"
+                class="w-6 h-6 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400 hover:text-slate-600 shrink-0">
+          <X class="w-3.5 h-3.5" />
+        </button>
+      </div>
+
       <!-- Лента сообщений -->
       <div ref="messagesContainer" @scroll="onMessagesScroll" class="flex-1 px-3 sm:px-5 py-4 overflow-y-auto thin-scroll z-10 space-y-3 select-text relative">
         <div v-if="messagesLoading" class="flex h-full items-center justify-center">
@@ -921,6 +950,20 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </button>
         </div>
       </header>
+      <!-- Полоска закреплённого сообщения (Split View) -->
+      <div v-if="latestPinnedSplit"
+           class="px-4 py-2 border-b border-slate-200/70 dark:border-white/[0.06] bg-[#3D7A5E]/[0.06] flex items-center gap-2.5 shrink-0">
+        <Pin class="w-3.5 h-3.5 text-[#3D7A5E] shrink-0" />
+        <div class="min-w-0 flex-1">
+          <p class="text-[11px] font-semibold text-[#3D7A5E] leading-tight">Закреплённое сообщение</p>
+          <p class="text-xs text-slate-600 dark:text-slate-300 truncate leading-tight">{{ latestPinnedSplit.content || 'Вложение' }}</p>
+        </div>
+        <button @click.stop="chat.togglePinMessage(latestPinnedSplit.id, splitChatId || undefined)" title="Открепить"
+                class="w-6 h-6 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400 hover:text-slate-600 shrink-0">
+          <X class="w-3.5 h-3.5" />
+        </button>
+      </div>
+
       <div class="flex-1 px-3 sm:px-5 py-4 overflow-y-auto thin-scroll space-y-3 select-text">
         <div v-if="splitMessages.length === 0" class="flex justify-center pt-10 opacity-30">
           <p class="text-sm italic">Сообщений пока нет</p>
@@ -1172,6 +1215,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <button @click="onReactFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
             <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/><path d="M8 14c1 2 7 2 8 0" stroke-linecap="round"/></svg>
             Реакция
+          </button>
+          <button @click="onPinFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
+            <Pin class="w-4 h-4 shrink-0" />
+            {{ contextMenu.msg.isPinned ? 'Открепить' : 'Закрепить' }}
           </button>
           <!-- Только для своих сообщений -->
           <template v-if="contextMenu.msg.userId === auth.user?.id">

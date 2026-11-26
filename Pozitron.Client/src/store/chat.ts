@@ -22,6 +22,7 @@ export interface Message {
   avatarUrl?: string;
   emojiPrefix?: string;
   isRead?: boolean;
+  isPinned?: boolean;
   replyToMessageId?: string;
   replyToContent?: string;
   replyToUsername?: string;
@@ -148,6 +149,12 @@ export const useChatStore = defineStore('chat', {
             m => !messageIds.some(id => id.toLowerCase() === m.id.toLowerCase())
           );
         }
+      });
+
+      this.connection.on('MessagePinned', ({ chatId, messageId, isPinned }: { chatId: string, messageId: string, isPinned: boolean }) => {
+        const key = Object.keys(this.messages).find(k => k.toLowerCase() === chatId.toLowerCase());
+        const msg = key ? this.messages[key]?.find(m => m.id.toLowerCase() === messageId.toLowerCase()) : undefined;
+        if (msg) msg.isPinned = isPinned;
       });
 
       this.connection.onreconnected(async () => {
@@ -333,6 +340,12 @@ export const useChatStore = defineStore('chat', {
       } else {
         await api.delete(`/chat/${this.activeChat.id}/messages`, { data: messageIds });
       }
+    },
+
+    async togglePinMessage(messageId: string, targetChatId?: string) {
+      const chatId = targetChatId || this.activeChat?.id;
+      if (!chatId) return;
+      await api.post(`/chat/${chatId}/messages/${messageId}/pin`);
     },
   }
 });

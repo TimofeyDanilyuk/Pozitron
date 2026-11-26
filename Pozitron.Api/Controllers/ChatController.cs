@@ -107,6 +107,7 @@ public class ChatController : ControllerBase
                 AvatarUrl = m.User.AvatarUrl,
                 EmojiPrefix = m.User.EmojiPrefix,
                 IsRead = m.IsRead,
+                IsPinned = m.IsPinned,
                 ReplyToMessageId = m.ReplyToMessageId,
                 ReplyToContent = m.ReplyToContent,
                 ReplyToUsername = m.ReplyToUsername,
@@ -256,6 +257,27 @@ public class ChatController : ControllerBase
         });
 
         return Ok();
+    }
+
+    [HttpPost("{chatId}/messages/{messageId}/pin")]
+    public async Task<IActionResult> TogglePinMessage(Guid chatId, Guid messageId)
+    {
+        var message = await _context.Messages
+            .FirstOrDefaultAsync(m => m.Id == messageId && m.ChatId == chatId);
+
+        if (message == null) return NotFound();
+
+        message.IsPinned = !message.IsPinned;
+        await _context.SaveChangesAsync();
+
+        await _hub.Clients.Group(chatId.ToString()).SendAsync("MessagePinned", new
+        {
+            chatId = chatId.ToString(),
+            messageId = messageId.ToString(),
+            isPinned = message.IsPinned
+        });
+
+        return Ok(new { isPinned = message.IsPinned });
     }
 
     [HttpDelete("{chatId}/messages")]
@@ -441,6 +463,7 @@ public record MessageDto
     public string? AvatarUrl { get; set; }
     public string? EmojiPrefix { get; set; }
     public bool IsRead { get; set; }
+    public bool IsPinned { get; set; }
     public Guid? ReplyToMessageId { get; set; }
     public string? ReplyToContent { get; set; }
     public string? ReplyToUsername { get; set; }

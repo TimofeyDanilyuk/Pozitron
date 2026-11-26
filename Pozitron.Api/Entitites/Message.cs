@@ -16,6 +16,7 @@ public class Message
     public Guid ChatId { get; set; }
 
     public bool IsRead { get; set; } = false;
+    public bool IsPinned { get; set; } = false;
 
     public Guid? ReplyToMessageId { get; set; }
     public string? ReplyToContent { get; set; }
