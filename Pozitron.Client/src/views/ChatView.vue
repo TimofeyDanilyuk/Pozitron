@@ -18,7 +18,26 @@ import {
   Sticker,
   Smile,
   ChevronLeft,
-  Paperclip
+  Paperclip,
+  Send,
+  Columns2,
+  Rows2,
+  PanelTop,
+  PanelBottom,
+  X,
+  LayoutGrid,
+  Sun,
+  Moon,
+  LogOut,
+  UserPlus,
+  Shield,
+  Bell,
+  BellOff,
+  Trash2,
+  Pin,
+  FileText,
+  Phone,
+  ArrowDown
 } from 'lucide-vue-next';
 
 const auth = useAuthStore();
@@ -47,6 +66,44 @@ const mobileView = ref<'list' | 'chat'>('list');
 const chatsLoading = ref(false);
 const messagesLoading = ref(false);
 const uploadingAttachment = ref(false);
+
+// ===== НАСТРОЙКИ РАСКЛАДКИ И SPLIT VIEW =====
+const chatListPosition = ref<'top' | 'bottom'>((localStorage.getItem('chatListPosition') as 'top' | 'bottom') || 'top');
+const isAllChatsOpen = ref(false);
+const splitChatId = ref<string | null>(null);
+const splitDirection = ref<'horizontal' | 'vertical'>((localStorage.getItem('splitDirection') as 'horizontal' | 'vertical') || 'horizontal');
+const splitMessageInput = ref('');
+const isMuted = ref(false);
+
+const toggleChatListPosition = () => {
+  chatListPosition.value = chatListPosition.value === 'top' ? 'bottom' : 'top';
+  localStorage.setItem('chatListPosition', chatListPosition.value);
+};
+
+const toggleSplitDirection = () => {
+  splitDirection.value = splitDirection.value === 'horizontal' ? 'vertical' : 'horizontal';
+  localStorage.setItem('splitDirection', splitDirection.value);
+};
+
+const openSplitChat = async (chatObj: any) => {
+  if (chatObj.id === chat.activeChat?.id) return;
+  splitChatId.value = chatObj.id;
+  await chat.loadChatMessages(chatObj.id);
+};
+
+const closeSplitChat = () => {
+  splitChatId.value = null;
+  splitMessageInput.value = '';
+};
+
+const sendSplitMessage = async () => {
+  if (!splitMessageInput.value.trim() || !splitChatId.value) return;
+  await chat.sendMessage(splitMessageInput.value, splitChatId.value);
+  splitMessageInput.value = '';
+};
+
+const splitChatObj = computed(() => chat.chats.find(c => c.id === splitChatId.value) || null);
+const splitMessages = computed(() => splitChatId.value ? (chat.messages[splitChatId.value] || []) : []);
 
 // ===== КОНТЕКСТНОЕ МЕНЮ =====
 const contextMenu = ref<{ x: number; y: number; msg: any } | null>(null);
@@ -156,7 +213,7 @@ const handleToggleStickerPicker = async () => {
 };
 
 // ===== ГОЛОСОВЫЕ =====
-const { isRecording, toggleRecording } = useVoiceRecorder(async (file) => {
+const { isRecording, recordingDuration, toggleRecording, cancelRecording } = useVoiceRecorder(async (file) => {
   uploadingAttachment.value = true;
   try {
     await chat.uploadAttachment(file);
@@ -324,146 +381,198 @@ const onFileSelected = async (event: Event) => {
 };
 const formatTime = (dateStr: string) =>
   new Date(dateStr).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const formatDuration = (sec: number) => {
+  const m = Math.floor(sec / 60).toString().padStart(2, '0');
+  const s = (sec % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+};
+const formatDateDivider = (dateStr: string) => {
+  const d = new Date(dateStr);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Сегодня';
+  if (d.toDateString() === yesterday.toDateString()) return 'Вчера';
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+};
+const shouldShowDateDivider = (index: number) => {
+  if (index === 0) return true;
+  const prevMsg = currentMessages.value[index - 1];
+  const currMsg = currentMessages.value[index];
+  if (!prevMsg || !currMsg) return false;
+  return new Date(prevMsg.sentAt).toDateString() !== new Date(currMsg.sentAt).toDateString();
+};
 const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 </script>
 
 <template>
-  <div class="flex h-screen bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 overflow-hidden font-sans select-none transition-colors duration-300">
+  <div class="w-full h-full min-h-screen max-w-[1920px] mx-auto p-2 sm:p-3 flex gap-2.5 text-slate-900 dark:text-slate-100 overflow-hidden font-sans select-none transition-colors duration-300 relative"
+       :class="chatListPosition === 'bottom' ? 'flex-col-reverse' : 'flex-col'">
+    <div class="ambient-canvas"></div>
 
-    <!-- САЙДБАР -->
-    <aside :class="[
-      'flex flex-col bg-slate-50 dark:bg-slate-950/50 backdrop-blur-xl border-r border-slate-200 dark:border-slate-800',
-      'md:relative md:w-80 md:flex',
-      mobileView === 'list' ? 'absolute inset-0 z-10 flex w-full' : 'hidden md:flex'
-    ]">
-      <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center bg-white/80 dark:bg-slate-950/30 shrink-0">
-        <div class="flex items-center gap-3 overflow-hidden">
-          <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shrink-0 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div>
-          <div class="flex items-center gap-1.5 min-w-0">
-            <span class="text-lg leading-none">{{ auth.user?.emojiPrefix || '⚛️' }}</span>
-            <h2 class="text-base font-black tracking-tight truncate uppercase italic text-slate-900 dark:text-white">{{ auth.user?.username || 'User' }}</h2>
-          </div>
+    <!-- ===== ВЕРХНЯЯ / НИЖНЯЯ ЛЕНТА ЧАТОВ ===== -->
+    <header class="surface-strip rounded-2xl w-full px-3 py-2 flex items-center gap-2.5 z-20 shrink-0">
+      <!-- Логотип -->
+      <div class="flex items-center gap-2 pr-2 border-r border-slate-200 dark:border-white/[0.08] shrink-0">
+        <div class="w-8 h-8 text-[#3D7A5E] flex items-center justify-center">
+          <svg viewBox="0 0 48 48" fill="none" class="w-7 h-7">
+            <rect x="2" y="2" width="44" height="44" rx="12" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.5" />
+            <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(-40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-opacity="0.5" />
+            <circle cx="24" cy="24" r="3.5" fill="currentColor" />
+            <circle cx="34.5" cy="15.5" r="2" fill="currentColor" />
+          </svg>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <button @click="toggleTheme" class="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-90">
-            <svg v-if="isDark" xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-            </svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-            </svg>
-          </button>
-          <div @click="openProfile" class="relative group cursor-pointer transition-transform active:scale-90">
-            <img v-if="auth.user?.avatarUrl" :src="auth.user.avatarUrl" class="w-10 h-10 rounded-xl border-2 border-blue-500 object-cover">
-            <div v-else class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold border-2 border-white/10 text-white">{{ auth.user?.username?.[0]?.toUpperCase() }}</div>
+        <span class="hidden sm:inline font-bold text-sm tracking-tight">Pozitron</span>
+      </div>
+
+      <!-- Кнопка "Все диалоги" -->
+      <button @click="isAllChatsOpen = true"
+        class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs font-medium transition-colors shrink-0">
+        <LayoutGrid class="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+        <span class="hidden sm:inline">Все диалоги</span>
+      </button>
+
+      <!-- Горизонтальная лента живых чатов -->
+      <div class="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5">
+        <div v-for="c in [...chat.contactChats, ...chat.otherChats]" :key="c.id" @click="openChat(c)"
+             :class="[
+               'group relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl cursor-pointer transition-all shrink-0 max-w-[210px] border',
+               chat.activeChat?.id === c.id
+                 ? 'bg-[#3D7A5E]/[0.12] border-[#3D7A5E]/30'
+                 : 'border-transparent hover:bg-black/[0.03] dark:hover:bg-white/[0.04]'
+             ]">
+          <div class="relative shrink-0">
+            <img v-if="c.avatarUrl && (c.isContact || c.type === 1)" :src="c.avatarUrl" class="w-8 h-8 rounded-full object-cover">
+            <div v-else class="w-8 h-8 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-xs font-bold">
+              <Globe v-if="c.type === 0 && !c.isContact" class="w-4 h-4" />
+              <span v-else>{{ c.name?.[0]?.toUpperCase() || '?' }}</span>
+            </div>
+            <span v-if="c.unreadCount > 0" class="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-[#3D7A5E] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+              {{ c.unreadCount > 9 ? '9+' : c.unreadCount }}
+            </span>
           </div>
-          <button v-if="auth.user?.role === 1" @click="router.push('/admin')" class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center hover:bg-blue-600/40 transition-all active:scale-90">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-semibold truncate leading-tight">{{ c.name || 'Чат' }}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate leading-tight">{{ c.lastMessage || 'Нет сообщений' }}</p>
+          </div>
+          <!-- Кнопка Split View при наведении -->
+          <button v-if="chat.activeChat && chat.activeChat.id !== c.id" @click.stop="openSplitChat(c)" title="Открыть в Split View"
+            class="hidden md:flex opacity-0 group-hover:opacity-100 w-6 h-6 rounded-lg bg-white/80 dark:bg-black/40 hover:text-[#3D7A5E] items-center justify-center text-slate-400 transition-all shrink-0">
+            <Columns2 class="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto">
-        <div v-if="chatsLoading" class="flex flex-col items-center justify-center h-full gap-3">
-          <div class="w-7 h-7 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-          <p class="text-xs text-slate-400 dark:text-slate-500">Загрузка чатов...</p>
-        </div>
-        <div v-else-if="chat.chats.length === 0" class="flex flex-col items-center justify-center h-full opacity-20 px-10 text-center">
-          <MessageSquare class="w-10 h-10 mb-2 stroke-[1.5]" />
-          <p class="text-xs uppercase tracking-widest font-bold">Список пуст</p>
-        </div>
-
-        <template v-if="chat.contactChats.length > 0">
-          <div class="px-4 pt-3 pb-1 flex items-center gap-2">
-            <span class="text-[10px] font-black uppercase tracking-widest text-blue-400">Контакты</span>
-            <div class="flex-1 h-px bg-blue-500/20"></div>
-          </div>
-          <div v-for="c in chat.contactChats" :key="c.id" @click="openChat(c)"
-               :class="['flex items-center gap-3 px-4 py-3 cursor-pointer transition-all active:bg-slate-200/50 dark:active:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800/50',
-                 chat.activeChat?.id === c.id ? 'bg-blue-50 dark:bg-blue-600/20 border-r-2 border-blue-500' : '']">
-            <div class="relative shrink-0">
-              <img v-if="c.avatarUrl" :src="c.avatarUrl" class="w-12 h-12 rounded-xl object-cover">
-              <div v-else class="w-12 h-12 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xl">{{ c.name?.[0]?.toUpperCase() }}</div>
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-1.5">
-                <svg viewBox="0 0 16 16" class="w-3 h-3 text-blue-400 shrink-0 fill-current"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1a5 5 0 0 0-5 5h10a5 5 0 0 0-5-5z"/></svg>
-                <p class="font-bold text-sm truncate text-blue-600 dark:text-blue-300">{{ c.name || 'Контакт' }}</p>
-              </div>
-              <p class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
-            </div>
-            <span v-if="c.unreadCount > 0" class="shrink-0 min-w-5 h-5 px-1 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">{{ c.unreadCount > 99 ? '99+' : c.unreadCount }}</span>
-            <span class="text-slate-300 dark:text-slate-600 md:hidden flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="none"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </span>
-          </div>
-        </template>
-
-        <template v-if="chat.otherChats.length > 0">
-          <div class="px-4 pt-3 pb-1 flex items-center gap-2">
-            <span class="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">Чаты</span>
-            <div class="flex-1 h-px bg-slate-200 dark:bg-slate-700/50"></div>
-          </div>
-          <div v-for="c in chat.otherChats" :key="c.id" @click="openChat(c)"
-               :class="['flex items-center gap-3 px-4 py-3 cursor-pointer transition-all active:bg-slate-200/50 dark:active:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-800/50',
-                 chat.activeChat?.id === c.id ? 'bg-blue-50 dark:bg-blue-600/20 border-r-2 border-blue-500' : '']">
-            <div class="relative shrink-0">
-              <img v-if="c.avatarUrl && c.type === 1" :src="c.avatarUrl" class="w-12 h-12 rounded-xl object-cover">
-              <div v-else class="w-12 h-12 rounded-xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xl">
-                <Globe v-if="c.type === 0" class="w-5 h-5 text-slate-500 dark:text-slate-300" />
-                <span v-else>{{ c.name?.[0]?.toUpperCase() }}</span>
-              </div>
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="font-bold text-sm truncate">{{ c.name || 'Чат' }}</p>
-              <p class="text-xs text-slate-400 dark:text-slate-500 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
-            </div>
-            <span v-if="c.unreadCount > 0" class="shrink-0 min-w-5 h-5 px-1 bg-blue-500 text-white text-xs font-bold rounded-full flex items-center justify-center">{{ c.unreadCount > 99 ? '99+' : c.unreadCount }}</span>
-            <span class="text-slate-300 dark:text-slate-600 md:hidden flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="w-5 h-5" fill="none"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </span>
-          </div>
-        </template>
-      </div>
-
-      <div class="p-4 border-t border-slate-200 dark:border-slate-800 shrink-0 space-y-2">
-        <button @click="openAddContacts" class="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600/10 border border-blue-500/20 hover:bg-blue-600/20 transition-all active:scale-95 text-blue-500 dark:text-blue-400 text-sm font-bold">
-          <svg viewBox="0 0 24 24" class="w-4 h-4 fill-current shrink-0"><path d="M19 11h-6V5a1 1 0 0 0-2 0v6H5a1 1 0 0 0 0 2h6v6a1 1 0 0 0 2 0v-6h6a1 1 0 0 0 0-2z"/></svg>
-          Добавить контакты...
+      <!-- Правые контролы -->
+      <div class="flex items-center gap-1.5 pl-2 border-l border-slate-200 dark:border-white/[0.08] shrink-0">
+        <button @click="toggleChatListPosition" :title="chatListPosition === 'top' ? 'Переместить панель вниз' : 'Переместить панель наверх'"
+          class="w-8 h-8 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
+          <PanelBottom v-if="chatListPosition === 'top'" class="w-4 h-4" />
+          <PanelTop v-else class="w-4 h-4" />
         </button>
-        <div class="relative">
+        <button @click="toggleTheme" :title="isDark ? 'Светлая тема' : 'Тёмная тема'"
+          class="w-8 h-8 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
+          <Sun v-if="isDark" class="w-4 h-4" />
+          <Moon v-else class="w-4 h-4" />
+        </button>
+        <button v-if="auth.user?.role === 1" @click="router.push('/admin')" title="Админ панель"
+          class="w-8 h-8 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
+          <Shield class="w-4 h-4" />
+        </button>
+        <button @click="openProfile" title="Профиль" class="relative cursor-pointer ml-0.5">
+          <img v-if="auth.user?.avatarUrl" :src="auth.user.avatarUrl" class="w-8 h-8 rounded-full object-cover border border-slate-300 dark:border-white/15">
+          <div v-else class="w-8 h-8 rounded-full bg-[#3D7A5E] flex items-center justify-center text-xs font-bold text-white">{{ auth.user?.username?.[0]?.toUpperCase() }}</div>
+          <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-[#15171A]"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- МОДАЛКА "ВСЕ ДИАЛОГИ" -->
+    <div v-if="isAllChatsOpen" @click="isAllChatsOpen = false" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div @click.stop class="surface-sheet rounded-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden">
+        <div class="p-4 border-b border-slate-200 dark:border-white/[0.08] flex items-center justify-between">
+          <h3 class="font-semibold text-sm">Все диалоги</h3>
+          <div class="flex items-center gap-2">
+            <button @click="openAddContacts(); isAllChatsOpen = false" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#3D7A5E]/15 text-[#3D7A5E] text-xs font-medium hover:bg-[#3D7A5E]/25 transition-colors">
+              <UserPlus class="w-3.5 h-3.5" />
+              <span>Контакты</span>
+            </button>
+            <button @click="handleLogout" title="Выйти" class="w-8 h-8 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors">
+              <LogOut class="w-4 h-4" />
+            </button>
+            <button @click="isAllChatsOpen = false" class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        <div class="p-3 border-b border-slate-200 dark:border-white/[0.08] relative">
           <input v-model="searchQuery" @input="onSearch" type="text" placeholder="Найти пользователя..."
-                 class="w-full bg-white dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500/50 transition-all select-text text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600">
-          <div v-if="isSearchOpen" class="absolute bottom-full mb-2 left-0 right-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-2xl max-h-48 overflow-y-auto">
-            <div v-for="user in chat.users" :key="user.id" @click="startDm(user.id)" class="flex items-center gap-3 px-4 py-3 hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 cursor-pointer transition-all">
-              <div :class="['w-2 h-2 rounded-full shrink-0', isOnline(user.id) ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600']"></div>
+                 class="w-full bg-black/[0.04] dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl px-3.5 py-2 text-sm outline-none focus:border-[#3D7A5E] select-text">
+          <div v-if="isSearchOpen" class="mt-2 bg-white dark:bg-[#1C1E23] border border-slate-200 dark:border-white/[0.08] rounded-xl overflow-hidden max-h-40 overflow-y-auto">
+            <div v-for="user in chat.users" :key="user.id" @click="startDm(user.id); isAllChatsOpen = false" class="flex items-center gap-3 px-3.5 py-2.5 hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer">
+              <div :class="['w-2 h-2 rounded-full shrink-0', isOnline(user.id) ? 'bg-emerald-500' : 'bg-slate-400']"></div>
               <span class="text-sm">{{ user.emojiPrefix || '' }} {{ user.username }}</span>
             </div>
-            <div v-if="chat.users.length === 0" class="px-4 py-2 text-xs text-slate-400 dark:text-slate-500 text-center">Не найдено</div>
+            <div v-if="chat.users.length === 0" class="px-3.5 py-2 text-xs text-slate-400 text-center">Не найдено</div>
+          </div>
+        </div>
+        <div class="flex-1 overflow-y-auto thin-scroll p-2 space-y-1">
+          <div v-if="chat.contactChats.length > 0" class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Личные</div>
+          <div v-for="c in chat.contactChats" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
+               :class="['flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors', chat.activeChat?.id === c.id ? 'bg-[#3D7A5E]/15 text-[#3D7A5E]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]']">
+            <div class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0">
+              <span>{{ c.name?.[0]?.toUpperCase() || '?' }}</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
+              <p class="text-xs text-slate-400 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+            </div>
+            <button v-if="chat.activeChat && chat.activeChat.id !== c.id" @click.stop="openSplitChat(c); isAllChatsOpen = false" title="Split View"
+              class="hidden md:flex w-7 h-7 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 items-center justify-center text-slate-400 hover:text-[#3D7A5E]">
+              <Columns2 class="w-4 h-4" />
+            </button>
+          </div>
+          <div v-if="chat.otherChats.length > 0" class="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Групповые</div>
+          <div v-for="c in chat.otherChats" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
+               :class="['flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors', chat.activeChat?.id === c.id ? 'bg-[#3D7A5E]/15 text-[#3D7A5E]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]']">
+            <div class="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-xs font-bold shrink-0">
+              <Globe v-if="c.type === 0 && !c.isContact" class="w-4 h-4" />
+              <span v-else>{{ c.name?.[0]?.toUpperCase() || '?' }}</span>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
+              <p class="text-xs text-slate-400 truncate">{{ c.lastMessage || 'Нет сообщений' }}</p>
+            </div>
+            <button v-if="chat.activeChat && chat.activeChat.id !== c.id" @click.stop="openSplitChat(c); isAllChatsOpen = false" title="Split View"
+              class="hidden md:flex w-7 h-7 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 items-center justify-center text-slate-400 hover:text-[#3D7A5E]">
+              <Columns2 class="w-4 h-4" />
+            </button>
           </div>
         </div>
       </div>
-    </aside>
+    </div>
 
-    <!-- ОСНОВНАЯ ОБЛАСТЬ -->
-    <main :class="['flex-1 flex flex-col bg-[#F7F8FA] dark:bg-[#0E1015] relative', mobileView === 'list' ? 'hidden md:flex' : 'flex']">
+    <!-- ОСНОВНАЯ ОБЛАСТЬ (С ПОДДЕРЖКОЙ SPLIT VIEW) -->
+    <div :class="['flex-1 flex min-w-0 min-h-0 gap-2.5 w-full relative z-10', splitDirection === 'horizontal' ? 'flex-col md:flex-row' : 'flex-col']">
+    <main class="flex-1 flex flex-col surface-sheet rounded-2xl md:rounded-3xl relative overflow-hidden min-w-0 min-h-0">
 
-      <header class="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-900/80 backdrop-blur-md z-10 shrink-0">
-        <div class="flex items-center gap-2">
-          <button @click="goBackToList" class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 active:bg-slate-200 dark:active:bg-slate-700 transition-all text-blue-600 dark:text-blue-400">
+      <header class="px-4 py-3 border-b border-slate-200/80 dark:border-white/[0.06] flex items-center justify-between z-10 shrink-0">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <button @click="goBackToList" class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all text-[#3D7A5E]">
             <ChevronLeft class="w-6 h-6" />
           </button>
-          <div v-if="chat.activeChat" class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-base shrink-0">
-              <Globe v-if="chat.activeChat.type === 0" class="w-4 h-4 text-slate-500 dark:text-slate-300" />
-              <span v-else>{{ chat.activeChat.name?.[0]?.toUpperCase() }}</span>
+          <div v-if="chat.activeChat" class="flex items-center gap-2.5 min-w-0">
+            <div class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-sm font-bold shrink-0">
+              <Globe v-if="chat.activeChat.type === 0 && !chat.activeChat.isContact" class="w-4 h-4" />
+              <span v-else>{{ chat.activeChat.name?.[0]?.toUpperCase() || '?' }}</span>
             </div>
-            <div class="flex items-center gap-1.5">
-              <p class="font-bold text-sm" :class="chat.activeChat.isContact ? 'text-blue-600 dark:text-blue-300' : ''">{{ chat.activeChat.name || 'Чат' }}</p>
-              <svg v-if="chat.activeChat.isContact" viewBox="0 0 16 16" class="w-3.5 h-3.5 text-blue-400 fill-current"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 1a5 5 0 0 0-5 5h10a5 5 0 0 0-5-5z"/></svg>
+            <div class="min-w-0">
+              <p class="font-bold text-sm truncate">{{ chat.activeChat.name || 'Чат' }}</p>
+              <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                <span>в сети</span>
+              </div>
             </div>
           </div>
           <div v-else class="flex items-center gap-2">
@@ -471,14 +580,33 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <span class="font-bold tracking-widest text-xs uppercase opacity-70">Выберите чат</span>
           </div>
         </div>
-        <button @click="handleLogout" class="px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 dark:text-red-400 text-xs font-bold transition-all border border-red-500/20 active:scale-95">Выйти</button>
+        <div v-if="chat.activeChat" class="flex items-center gap-1.5">
+          <button title="Медиа" class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
+            <ImageIcon class="w-3.5 h-3.5" />
+            <span>Медиа</span>
+          </button>
+          <button title="Файлы" class="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
+            <FileText class="w-3.5 h-3.5" />
+            <span>Файлы</span>
+          </button>
+          <button title="Закреплённые" class="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
+            <Pin class="w-3.5 h-3.5" />
+          </button>
+          <button title="Звонок" class="hidden md:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#3D7A5E]/15 hover:bg-[#3D7A5E]/25 text-xs text-[#3D7A5E] transition-colors">
+            <Phone class="w-3.5 h-3.5" />
+          </button>
+          <button @click="chat.activeChat = null; mobileView = 'list'" title="Закрыть чат"
+            class="w-8 h-8 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
       </header>
 
       <!-- Лента сообщений -->
-      <div ref="messagesContainer" @scroll="onMessagesScroll" class="flex-1 px-3 py-4 overflow-y-auto z-10 space-y-3 select-text relative">
+      <div ref="messagesContainer" @scroll="onMessagesScroll" class="flex-1 px-3 sm:px-5 py-4 overflow-y-auto thin-scroll z-10 space-y-3 select-text relative">
         <div v-if="messagesLoading" class="flex h-full items-center justify-center">
           <div class="flex flex-col items-center gap-3 opacity-50">
-            <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div class="w-8 h-8 border-2 border-[#3D7A5E] border-t-transparent rounded-full animate-spin"></div>
             <p class="text-xs text-slate-400 dark:text-slate-500">Загрузка сообщений...</p>
           </div>
         </div>
@@ -491,43 +619,52 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <p class="text-sm italic">Сообщений пока нет. Будь первым!</p>
           </div>
 
-          <div v-for="msg in currentMessages" :key="msg.id" :id="`msg-${msg.id}`"
-               :class="['flex gap-2 items-end transition-colors rounded-xl px-1',
-                 msg.userId === auth.user?.id ? 'flex-row-reverse' : '',
-                 isSelecting && selectedMessages.has(msg.id) ? 'bg-blue-100 dark:bg-blue-600/20' : '']"
-               @click="isSelecting && msg.userId === auth.user?.id ? toggleSelectMessage(msg.id) : null">
-
-            <!-- Чекбокс выделения (только свои) -->
-            <div v-if="isSelecting && msg.userId === auth.user?.id"
-                 :class="['shrink-0 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
-                   selectedMessages.has(msg.id) ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600']"
-                 :style="msg.userId === auth.user?.id ? 'order: -1' : ''">
-              <svg v-if="selectedMessages.has(msg.id)" viewBox="0 0 16 16" class="w-3 h-3 fill-white">
-                <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
-              </svg>
+          <template v-for="(msg, index) in currentMessages" :key="msg.id">
+            <!-- Разделитель дней -->
+            <div v-if="shouldShowDateDivider(index)" class="flex justify-center my-3">
+              <span class="px-3 py-1 rounded-full text-[11px] font-medium bg-black/[0.05] dark:bg-white/[0.06] text-slate-500 dark:text-slate-400">
+                {{ formatDateDivider(msg.sentAt) }}
+              </span>
             </div>
-            <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
-            <div v-else class="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ msg.username?.[0]?.toUpperCase() }}</div>
 
-            <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
-              <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ msg.emojiPrefix }} {{ msg.username }} · {{ formatTime(msg.sentAt) }}</span>
-              <div @contextmenu.prevent="showContextMenu($event, msg)"
-                   @touchstart="onMessageLongPress($event, msg)"
-                   @touchend="onMessageLongPressCancel"
-                   @touchmove="onMessageLongPressCancel">
-                <MessageBubble
-                  :msg="msg"
-                  :is-own="msg.userId === auth.user?.id"
-                  :on-sticker-click="onStickerClick"
-                  :on-reply="chat.setReply"
-                  :on-react="(id) => { reactionPicker = { x: 0, y: 0, msgId: id }; }"
-                  :scroll-to-message="scrollToMessage"
-                  :add-reaction="chat.addReaction"
-                  :current-user-id="auth.user?.id ?? ''"
-                />
+            <div :id="`msg-${msg.id}`"
+                 :class="['flex gap-2 items-end transition-colors rounded-xl px-1',
+                   msg.userId === auth.user?.id ? 'flex-row-reverse' : '',
+                   isSelecting && selectedMessages.has(msg.id) ? 'bg-[#3D7A5E]/15' : '']"
+                 @click="isSelecting && msg.userId === auth.user?.id ? toggleSelectMessage(msg.id) : null">
+
+              <!-- Чекбокс выделения (только свои) -->
+              <div v-if="isSelecting && msg.userId === auth.user?.id"
+                   :class="['shrink-0 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
+                     selectedMessages.has(msg.id) ? 'bg-[#3D7A5E] border-[#3D7A5E]' : 'border-slate-300 dark:border-slate-600']"
+                   :style="msg.userId === auth.user?.id ? 'order: -1' : ''">
+                <svg v-if="selectedMessages.has(msg.id)" viewBox="0 0 16 16" class="w-3 h-3 fill-white">
+                  <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
+                </svg>
+              </div>
+              <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
+              <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ msg.username?.[0]?.toUpperCase() }}</div>
+
+              <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
+                <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ msg.emojiPrefix }} {{ msg.username }} · {{ formatTime(msg.sentAt) }}</span>
+                <div @contextmenu.prevent="showContextMenu($event, msg)"
+                     @touchstart="onMessageLongPress($event, msg)"
+                     @touchend="onMessageLongPressCancel"
+                     @touchmove="onMessageLongPressCancel">
+                  <MessageBubble
+                    :msg="msg"
+                    :is-own="msg.userId === auth.user?.id"
+                    :on-sticker-click="onStickerClick"
+                    :on-reply="chat.setReply"
+                    :on-react="(id) => { reactionPicker = { x: 0, y: 0, msgId: id }; }"
+                    :scroll-to-message="scrollToMessage"
+                    :add-reaction="chat.addReaction"
+                    :current-user-id="auth.user?.id ?? ''"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          </template>
         </template>
 
         <div ref="messagesEnd"></div>
@@ -536,10 +673,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       <!-- Кнопка вниз -->
       <Transition name="fade">
         <button v-if="showScrollButton" @click="scrollToBottomSmooth"
-                class="absolute bottom-20 right-4 z-20 w-10 h-10 rounded-full bg-blue-600 hover:bg-blue-500 text-white shadow-lg flex items-center justify-center transition-all active:scale-90">
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
-          </svg>
+                class="absolute bottom-24 right-5 z-20 w-10 h-10 rounded-full bg-[#3D7A5E] hover:bg-[#346950] text-white shadow-lg flex items-center justify-center transition-all active:scale-90">
+          <ArrowDown class="w-5 h-5" />
         </button>
       </Transition>
 
@@ -561,24 +696,23 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </div>
       </Transition>
 
-      <!-- Футер -->
-      <footer class="p-3 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 z-10 shrink-0 relative">
-        <Transition name="picker">
-          <StickerPicker v-if="isStickerPickerOpen" @send-sticker="handleSendSticker" @close="isStickerPickerOpen = false" />
-        </Transition>
-        <Transition name="picker">
-          <EmojiPicker v-if="isChatEmojiPickerOpen" class="mb-2" @select="(e) => { messageInput += e; isChatEmojiPickerOpen = false; }" />
-        </Transition>
-
-        <div class="flex items-end gap-2 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 p-1.5 rounded-2xl focus-within:border-blue-500/50 transition-all">
+      <!-- Остров ввода сообщений -->
+      <footer class="px-3 pb-3 pt-1 z-10 shrink-0 relative">
+        <div class="max-w-3xl mx-auto relative">
+          <Transition name="picker">
+            <StickerPicker v-if="isStickerPickerOpen" @send-sticker="handleSendSticker" @close="isStickerPickerOpen = false" />
+          </Transition>
+          <Transition name="picker">
+            <EmojiPicker v-if="isChatEmojiPickerOpen" class="mb-2" @select="(e) => { messageInput += e; isChatEmojiPickerOpen = false; }" />
+          </Transition>
 
           <!-- Превью ответа -->
           <Transition name="picker">
-            <div v-if="chat.replyingTo" class="absolute bottom-full left-0 right-0 mb-1 mx-3">
-              <div class="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 shadow-lg">
-                <div class="w-0.5 h-8 bg-blue-500 rounded-full shrink-0"></div>
+            <div v-if="chat.replyingTo" class="mb-2">
+              <div class="flex items-center gap-2 surface-composer rounded-xl px-3 py-2 shadow-lg">
+                <div class="w-0.5 h-8 bg-[#3D7A5E] rounded-full shrink-0"></div>
                 <div class="flex-1 min-w-0">
-                  <p class="text-xs font-bold text-blue-500">{{ chat.replyingTo.username }}</p>
+                  <p class="text-xs font-bold text-[#3D7A5E]">{{ chat.replyingTo.username }}</p>
                   <p class="text-xs text-slate-500 dark:text-slate-400 truncate flex items-center gap-1">
                     <template v-if="chat.replyingTo.type === 'Voice'"><Mic class="w-3.5 h-3.5 shrink-0" /><span>Голосовое</span></template>
                     <template v-else-if="chat.replyingTo.type === 'Image'"><ImageIcon class="w-3.5 h-3.5 shrink-0" /><span>Изображение</span></template>
@@ -587,67 +721,135 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                     <template v-else>{{ chat.replyingTo.content }}</template>
                   </p>
                 </div>
-                <button @click="chat.setReply(null)" class="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-all">
-                  <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
+                <button @click="chat.setReply(null)" class="shrink-0 w-6 h-6 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-slate-400 transition-all">
+                  <X class="w-4 h-4" />
                 </button>
               </div>
             </div>
           </Transition>
 
-          <button @click="triggerAttachmentInput" :disabled="!chat.activeChat || uploadingAttachment"
-                  :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5', !chat.activeChat ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400']">
-            <div v-if="uploadingAttachment" class="w-6 h-6 flex items-center justify-center">
-              <div class="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+          <!-- Режим записи голосового -->
+          <div v-if="isRecording" class="surface-composer rounded-2xl p-2 flex items-center gap-3">
+            <button @click="cancelRecording" title="Отменить запись"
+                    class="p-2 rounded-xl text-red-500 hover:bg-red-500/10 transition-colors shrink-0">
+              <Trash2 class="w-5 h-5" />
+            </button>
+            <div class="flex items-center gap-2 flex-1 min-w-0">
+              <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0"></span>
+              <span class="text-xs font-mono font-semibold tabular-nums text-slate-700 dark:text-slate-200">{{ formatDuration(recordingDuration) }}</span>
+              <div class="flex items-center gap-1 flex-1 h-6 overflow-hidden px-2">
+                <span v-for="i in 16" :key="i" class="rec-wave-bar w-1 bg-[#3D7A5E] rounded-full" :style="{ animationDelay: `${(i % 5) * 0.12}s` }"></span>
+              </div>
             </div>
-            <Paperclip v-else class="w-5 h-5 text-blue-600 dark:text-blue-400" />
-          </button>
-          <input id="attachmentInput" type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" @change="onAttachmentSelected">
+            <button @click="toggleRecording" title="Отправить голосовое"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0">
+              <Send class="w-5 h-5" />
+            </button>
+          </div>
 
-          <button @click.stop="handleToggleStickerPicker" :disabled="!chat.activeChat"
-                  :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
-                    isStickerPickerOpen ? 'bg-blue-600/30 text-blue-500 dark:text-blue-300' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400',
-                    !chat.activeChat ? 'opacity-40 cursor-not-allowed' : '']">
-            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor">
-              <rect x="3" y="3" width="18" height="18" rx="4" stroke-width="2"/>
-              <circle cx="8.5" cy="9" r="1.5" fill="currentColor" stroke="none"/>
-              <circle cx="15.5" cy="9" r="1.5" fill="currentColor" stroke="none"/>
-              <path d="M7 14.5C8.5 17 15.5 17 17 14.5" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
+          <!-- Обычный режим ввода -->
+          <div v-else class="surface-composer flex items-end gap-1.5 p-1.5 rounded-2xl transition-all">
+            <button @click="triggerAttachmentInput" :disabled="!chat.activeChat || uploadingAttachment"
+                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5', !chat.activeChat ? 'opacity-40 cursor-not-allowed' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
+              <div v-if="uploadingAttachment" class="w-5 h-5 flex items-center justify-center">
+                <div class="w-4 h-4 border-2 border-[#3D7A5E] border-t-transparent rounded-full animate-spin"></div>
+              </div>
+              <Paperclip v-else class="w-5 h-5 text-[#3D7A5E]" />
+            </button>
+            <input id="attachmentInput" type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" @change="onAttachmentSelected">
 
-          <button @click.stop="isChatEmojiPickerOpen = !isChatEmojiPickerOpen; isStickerPickerOpen = false"
-                  :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
-                    isChatEmojiPickerOpen ? 'bg-blue-600/30 text-blue-500 dark:text-blue-300' : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400']">
-            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
-              <circle cx="9" cy="10" r="1" fill="currentColor"/>
-              <circle cx="15" cy="10" r="1" fill="currentColor"/>
-              <path d="M8 14C9 16 15 16 16 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-          </button>
+            <button @click.stop="handleToggleStickerPicker" :disabled="!chat.activeChat"
+                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+                      isStickerPickerOpen ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400',
+                      !chat.activeChat ? 'opacity-40 cursor-not-allowed' : '']">
+              <Sticker class="w-5 h-5" />
+            </button>
 
-          <textarea v-model="messageInput" @keydown="handleKeydown"
-                    :placeholder="chat.activeChat ? 'Напиши что-нибудь...' : 'Выберите чат...'"
-                    :disabled="!chat.activeChat" rows="1"
-                    class="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-600 select-text disabled:opacity-40 resize-none max-h-32 overflow-y-auto text-slate-900 dark:text-slate-100"
-                    style="field-sizing: content;"></textarea>
+            <button @click.stop="isChatEmojiPickerOpen = !isChatEmojiPickerOpen; isStickerPickerOpen = false"
+                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+                      isChatEmojiPickerOpen ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
+              <Smile class="w-5 h-5" />
+            </button>
 
-          <button @click="sendMessage" :disabled="!chat.activeChat || !messageInput.trim()"
-                  class="bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2.5 rounded-xl shadow-lg active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 self-end">
-            <svg viewBox="0 0 24 24" class="w-6 h-6 fill-white"><path d="M3 12L21 4L14 20L11 13L3 12Z"/></svg>
-          </button>
+            <button @click="isMuted = !isMuted" :title="isMuted ? 'Отправлять со звуком' : 'Отправлять без звука'"
+                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
+                      isMuted ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
+              <BellOff v-if="isMuted" class="w-5 h-5" />
+              <Bell v-else class="w-5 h-5" />
+            </button>
 
-          <button v-if="!messageInput.trim() && chat.activeChat" @click="toggleRecording"
-                  :class="['px-3 py-2.5 rounded-xl shadow-lg transition-all shrink-0 self-end active:scale-95', isRecording ? 'bg-red-500 animate-pulse' : 'bg-gradient-to-r from-blue-600 to-indigo-600']">
-            <svg v-if="!isRecording" viewBox="0 0 24 24" class="w-6 h-6 fill-white">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2H3v2a9 9 0 0 0 8 8.94V23h-3v2h8v-2h-3v-2.06A9 9 0 0 0 21 12v-2h-2z"/>
-            </svg>
-            <svg v-else viewBox="0 0 24 24" class="w-6 h-6 fill-white"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
-          </button>
+            <textarea v-model="messageInput" @keydown="handleKeydown"
+                      :placeholder="chat.activeChat ? 'Напиши что-нибудь...' : 'Выберите чат...'"
+                      :disabled="!chat.activeChat" rows="1"
+                      class="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 select-text disabled:opacity-40 resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
+                      style="field-sizing: content;"></textarea>
+
+            <button v-if="messageInput.trim()" @click="sendMessage" :disabled="!chat.activeChat"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end">
+              <Send class="w-5 h-5" />
+            </button>
+
+            <button v-else-if="chat.activeChat" @click="toggleRecording"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] p-2.5 rounded-xl text-white transition-colors shrink-0 self-end">
+              <Mic class="w-5 h-5" />
+            </button>
+          </div>
         </div>
       </footer>
     </main>
+
+    <!-- ВТОРОЙ ЧАТ (SPLIT VIEW) -->
+    <section v-if="splitChatObj" class="hidden md:flex flex-1 flex-col surface-sheet rounded-2xl relative overflow-hidden min-w-0 min-h-0">
+      <header class="px-4 py-3 border-b border-slate-200/80 dark:border-white/[0.06] flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2 min-w-0">
+          <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm shrink-0">
+            <Globe v-if="splitChatObj.type === 0" class="w-4 h-4 text-slate-500 dark:text-slate-300" />
+            <span v-else>{{ splitChatObj.name?.[0]?.toUpperCase() }}</span>
+          </div>
+          <p class="font-bold text-sm truncate">{{ splitChatObj.name || 'Чат' }}</p>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <button @click="toggleSplitDirection" :title="splitDirection === 'horizontal' ? 'Расположить друг над другом' : 'Расположить рядом'"
+            class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
+            <Rows2 v-if="splitDirection === 'horizontal'" class="w-4 h-4" />
+            <Columns2 v-else class="w-4 h-4" />
+          </button>
+          <button @click="closeSplitChat" title="Закрыть второй чат"
+            class="w-8 h-8 rounded-lg hover:bg-red-500/10 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors">
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+      </header>
+      <div class="flex-1 px-3 py-4 overflow-y-auto thin-scroll space-y-3 select-text">
+        <div v-if="splitMessages.length === 0" class="flex justify-center pt-10 opacity-30">
+          <p class="text-sm italic">Сообщений пока нет</p>
+        </div>
+        <div v-for="msg in splitMessages" :key="msg.id" :class="['flex items-end gap-2', msg.userId === auth.user?.id ? 'justify-end' : 'justify-start']">
+          <MessageBubble
+            :msg="msg"
+            :is-own="msg.userId === auth.user?.id"
+            :on-sticker-click="onStickerClick"
+            :on-reply="(m: any) => chat.setReply(m)"
+            :on-react="() => {}"
+            :scroll-to-message="() => {}"
+            :add-reaction="(id: string, emoji: string) => chat.addReaction(id, emoji)"
+            :current-user-id="auth.user?.id || ''"
+          />
+        </div>
+      </div>
+      <!-- Мини-композер второго чата -->
+      <footer class="p-2.5 border-t border-slate-200/80 dark:border-white/[0.06] shrink-0">
+        <div class="surface-composer flex items-center gap-2 p-1.5 rounded-xl">
+          <input v-model="splitMessageInput" @keydown.enter.prevent="sendSplitMessage" type="text" placeholder="Написать во второй чат..."
+                 class="flex-1 bg-transparent border-none px-2.5 py-1.5 outline-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 select-text text-slate-900 dark:text-slate-100">
+          <button @click="sendSplitMessage" :disabled="!splitMessageInput.trim()"
+                  class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0">
+            <Send class="w-4 h-4" />
+          </button>
+        </div>
+      </footer>
+    </section>
+    </div>
 
     <!-- МОДАЛКА КОНТАКТОВ -->
     <Transition name="fade">
@@ -674,7 +876,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                   <p class="text-xs text-slate-400 dark:text-slate-500">{{ isOnline(user.id) ? 'онлайн' : 'оффлайн' }}</p>
                 </div>
               </div>
-              <div :class="['w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0', selectedUserIds.has(user.id) ? 'bg-blue-600 border-blue-600' : 'border-slate-300 dark:border-slate-600']">
+              <div :class="['w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all shrink-0', selectedUserIds.has(user.id) ? 'bg-[#3D7A5E] border-[#3D7A5E]' : 'border-slate-300 dark:border-slate-600']">
                 <svg v-if="selectedUserIds.has(user.id)" viewBox="0 0 16 16" class="w-3.5 h-3.5 fill-white"><path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/></svg>
               </div>
             </div>
@@ -682,7 +884,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <div class="p-4 border-t border-slate-200 dark:border-slate-800 flex gap-3">
             <button @click="isAddContactsOpen = false" class="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold py-3 rounded-xl text-sm transition-all active:scale-95">Отмена</button>
             <button @click="confirmAddContacts" :disabled="selectedUserIds.size === 0 || addingContacts"
-                    class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3 rounded-xl text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                    class="flex-1 bg-[#3D7A5E] hover:bg-[#346950] text-white font-bold py-3 rounded-xl text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">
               {{ addingContacts ? 'Добавляем...' : `Добавить${selectedUserIds.size > 0 ? ` (${selectedUserIds.size})` : ''}` }}
             </button>
           </div>
@@ -724,7 +926,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       <div v-if="isProfileOpen" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
         <div @click="isProfileOpen = false; isEmojiPickerOpen = false" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm"></div>
         <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
-          <div class="h-20 bg-gradient-to-r from-blue-600 to-indigo-700"></div>
+          <div class="h-20 bg-gradient-to-r from-[#3D7A5E] to-[#2c5944]"></div>
           <div class="px-6 pb-8">
             <div class="relative -mt-10 mb-4 flex justify-center">
               <div @click="triggerFileInput" class="relative group cursor-pointer">
@@ -775,8 +977,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
             <div class="mt-6 flex gap-3">
               <button @click="isProfileOpen = false; isEmojiPickerOpen = false" class="flex-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold py-3 rounded-xl text-sm transition-all active:scale-95">Отмена</button>
-              <button @click="saveProfile" :disabled="isSaving" class="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-bold py-3 rounded-xl text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">{{ isSaving ? 'Ждем...' : 'Сохранить' }}</button>
+              <button @click="saveProfile" :disabled="isSaving" class="flex-1 bg-[#3D7A5E] hover:bg-[#346950] text-white font-bold py-3 rounded-xl text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">{{ isSaving ? 'Ждем...' : 'Сохранить' }}</button>
             </div>
+            <button @click="handleLogout" class="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-500 text-xs font-bold transition-colors">
+              <LogOut class="w-4 h-4" />
+              <span>Выйти из аккаунта</span>
+            </button>
           </div>
         </div>
       </div>
@@ -834,7 +1040,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 .highlight-message { animation: highlight 1.5s ease; }
 @keyframes highlight {
   0%   { background-color: transparent; }
-  20%  { background-color: rgba(168, 85, 247, 0.25); }
+  20%  { background-color: rgba(61, 122, 94, 0.25); }
   100% { background-color: transparent; }
 }
 </style>
