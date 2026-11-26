@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useAuthStore } from '../store/auth.ts';
 import { useRouter } from 'vue-router';
@@ -182,12 +182,12 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
 </script>
 
 <template>
-  <div class="min-h-screen grid lg:grid-cols-2 bg-[#F7F8FA] dark:bg-[#0E1015] text-slate-900 dark:text-slate-100 transition-colors duration-200">
+  <div class="min-h-screen grid lg:grid-cols-2 bg-[#F3F1EC] dark:bg-[#0E0F11] text-slate-900 dark:text-slate-100 transition-colors duration-200">
 
     <!-- ===== ЛЕВАЯ ПАНЕЛЬ ===== -->
-    <aside class="hidden lg:flex flex-col justify-center items-center p-12 border-r border-slate-200/80 dark:border-white/[0.06] bg-white dark:bg-[#12151C]">
+    <aside class="hidden lg:flex flex-col justify-center items-center p-12 border-r border-slate-200/80 dark:border-white/[0.06] surface-sheet">
       <div class="flex flex-col items-center text-center max-w-xs">
-        <div class="w-16 h-16 mb-6 text-blue-600 dark:text-blue-500">
+        <div class="w-16 h-16 mb-6 text-[#3D7A5E]">
           <svg viewBox="0 0 48 48" fill="none" class="w-full h-full">
             <rect x="2" y="2" width="44" height="44" rx="12" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.5" />
             <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(-40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -213,7 +213,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
         type="button"
         @click="toggleTheme"
         :title="isDark ? 'Включить светлую тему' : 'Включить тёмную тему'"
-        class="absolute top-6 right-6 w-9 h-9 rounded-xl border border-slate-200 dark:border-white/[0.08] bg-white dark:bg-[#161922] hover:bg-slate-100 dark:hover:bg-[#1D212D] text-slate-500 dark:text-slate-400 flex items-center justify-center transition-colors"
+        class="absolute top-6 right-6 w-9 h-9 rounded-xl border border-slate-200 dark:border-white/[0.08] surface-sheet hover:bg-slate-100 dark:hover:bg-[#1D212D] text-slate-500 dark:text-slate-400 flex items-center justify-center transition-colors"
       >
         <Sun v-if="isDark" class="w-4 h-4" />
         <Moon v-else class="w-4 h-4" />
@@ -222,7 +222,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
       <div class="w-full max-w-[380px]">
         <!-- Мобильный логотип -->
         <div class="lg:hidden flex items-center gap-3 mb-8 select-none">
-          <div class="w-9 h-9 text-blue-600 dark:text-blue-500">
+          <div class="w-9 h-9 text-[#3D7A5E]">
             <svg viewBox="0 0 48 48" fill="none" class="w-full h-full">
               <rect x="2" y="2" width="44" height="44" rx="12" fill="currentColor" fill-opacity="0.1" stroke="currentColor" stroke-opacity="0.22" stroke-width="1.5" />
               <ellipse cx="24" cy="24" rx="14" ry="6.5" transform="rotate(-40 24 24)" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
@@ -274,7 +274,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
               type="text"
               required
               autocomplete="username"
-              class="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#161922] border border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              class="w-full px-3.5 py-2.5 rounded-xl surface-sheet border border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
               placeholder="Введите никнейм"
             >
             <p v-if="mode === 'register' && username.trim().length > 0 && username.trim().length < 4"
@@ -291,7 +291,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                 v-if="mode === 'login'"
                 type="button"
                 @click="setMode('recover')"
-                class="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                class="text-xs text-[#3D7A5E] hover:underline"
               >
                 Забыли пароль?
               </button>
@@ -302,7 +302,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                 :type="showPassword ? 'text' : 'password'"
                 required
                 :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
-                class="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-white dark:bg-[#161922] border border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                class="w-full px-3.5 py-2.5 pr-10 rounded-xl surface-sheet border border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 placeholder="••••••••"
               >
               <button
@@ -366,10 +366,10 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                     required
                     autocomplete="new-password"
                     :class="[
-                      'w-full px-3.5 py-2.5 pr-10 rounded-xl bg-white dark:bg-[#161922] border outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500',
+                      'w-full px-3.5 py-2.5 pr-10 rounded-xl surface-sheet border outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500',
                       confirmPassword && password !== confirmPassword
                         ? 'border-red-500/70 focus:border-red-500 focus:ring-2 focus:ring-red-500/15'
-                        : 'border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15'
+                        : 'border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15'
                     ]"
                     placeholder="••••••••"
                   >
@@ -394,7 +394,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                   v-model="securityQuestion"
                   type="text"
                   required
-                  class="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#161922] border border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  class="w-full px-3.5 py-2.5 rounded-xl surface-sheet border border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="Например: кличка первого питомца"
                 >
               </div>
@@ -406,7 +406,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                   v-model="securityAnswer"
                   type="text"
                   required
-                  class="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#161922] border border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  class="w-full px-3.5 py-2.5 rounded-xl surface-sheet border border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="Ответ (регистр не важен)"
                 >
               </div>
@@ -417,7 +417,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
           <button
             type="submit"
             :disabled="loading || (mode === 'register' && !isPasswordValid)"
-            class="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition-colors mt-2 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            class="w-full bg-[#3D7A5E] hover:bg-[#346950] dark:bg-[#3D7A5E] dark:hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition-colors mt-2 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
             <span>{{ loading ? 'Секунду...' : (mode === 'login' ? 'Войти' : 'Создать аккаунт') }}</span>
@@ -435,7 +435,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                 v-model="recoverUsername"
                 type="text"
                 @keyup.enter="handleRecoverStep1"
-                class="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#161922] border border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                class="w-full px-3.5 py-2.5 rounded-xl surface-sheet border border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 placeholder="Введите никнейм"
               >
             </div>
@@ -443,7 +443,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
               type="button"
               @click="handleRecoverStep1"
               :disabled="loading"
-              class="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+              class="w-full bg-[#3D7A5E] hover:bg-[#346950] dark:bg-[#3D7A5E] dark:hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
             >
               <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
               <template v-else>
@@ -467,7 +467,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
               <input
                 v-model="recoverAnswer"
                 type="text"
-                class="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#161922] border border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                class="w-full px-3.5 py-2.5 rounded-xl surface-sheet border border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 placeholder="Ваш ответ"
               >
             </div>
@@ -478,7 +478,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                 <input
                   v-model="recoverNewPassword"
                   :type="showRecoverPassword ? 'text' : 'password'"
-                  class="w-full px-3.5 py-2.5 pr-10 rounded-xl bg-white dark:bg-[#161922] border border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  class="w-full px-3.5 py-2.5 pr-10 rounded-xl surface-sheet border border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15 outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   placeholder="••••••••"
                 >
                 <button
@@ -522,10 +522,10 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
                 v-model="recoverConfirmPassword"
                 type="password"
                 :class="[
-                  'w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-[#161922] border outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500',
+                  'w-full px-3.5 py-2.5 rounded-xl surface-sheet border outline-none transition-all text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500',
                   recoverConfirmPassword && recoverNewPassword !== recoverConfirmPassword
                     ? 'border-red-500/70 focus:border-red-500 focus:ring-2 focus:ring-red-500/15'
-                    : 'border-slate-200 dark:border-white/[0.08] focus:border-blue-600 dark:focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15'
+                    : 'border-slate-200 dark:border-white/[0.08] focus:border-[#3D7A5E] focus:ring-2 focus:ring-blue-500/15'
                 ]"
                 placeholder="••••••••"
               >
@@ -539,7 +539,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
               type="button"
               @click="handleRecoverStep2"
               :disabled="loading"
-              class="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+              class="w-full bg-[#3D7A5E] hover:bg-[#346950] dark:bg-[#3D7A5E] dark:hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl text-sm transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
             >
               <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
               <span>{{ loading ? 'Секунду...' : 'Сменить пароль' }}</span>
@@ -554,7 +554,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
             <button
               type="button"
               @click="setMode('register')"
-              class="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              class="font-medium text-[#3D7A5E] hover:underline"
             >
               Зарегистрироваться
             </button>
@@ -564,7 +564,7 @@ const setMode = (m: 'login' | 'register' | 'recover') => {
             <button
               type="button"
               @click="setMode('login')"
-              class="font-medium text-blue-600 dark:text-blue-400 hover:underline"
+              class="font-medium text-[#3D7A5E] hover:underline"
             >
               Войти
             </button>
