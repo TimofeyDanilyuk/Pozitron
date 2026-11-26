@@ -76,7 +76,7 @@ export const useChatStore = defineStore('chat', {
       const token = auth.token;
 
       this.connection = new signalR.HubConnectionBuilder()
-        .withUrl('https://pozitron-production.up.railway.app/hubs/chat', {
+        .withUrl('http://localhost:5088/hubs/chat', {
           accessTokenFactory: () => token
         })
         .withAutomaticReconnect()

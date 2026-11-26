@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useChatStore } from '../store/chat';
 
@@ -63,7 +63,7 @@ const uploadSticker = async (event: Event) => {
       <div class="w-14 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col items-center py-2 gap-2 overflow-y-auto shrink-0">
         <button v-for="pack in chat.stickerPacks" :key="pack.id" @click="selectPack(pack.id)"
                 :class="['w-10 h-10 rounded-xl overflow-hidden border-2 transition-all active:scale-90',
-                  activePack?.id === pack.id ? 'border-purple-500' : 'border-transparent']">
+                  activePack?.id === pack.id ? 'border-blue-500' : 'border-transparent']">
           <img v-if="pack.coverUrl" :src="pack.coverUrl" class="w-full h-full object-cover">
           <div v-else class="w-full h-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold">
             {{ pack.name[0] }}
@@ -72,7 +72,7 @@ const uploadSticker = async (event: Event) => {
         <button @click="isCreatePackOpen = !isCreatePackOpen; activeStickerPackId = null"
                 :class="['w-10 h-10 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90',
                   isCreatePackOpen
-                    ? 'border-purple-500 bg-purple-600/20 text-purple-400'
+                    ? 'border-blue-500 bg-blue-600/20 text-blue-400'
                     : 'border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 hover:border-slate-300 dark:hover:border-slate-600']">
           <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -85,9 +85,9 @@ const uploadSticker = async (event: Event) => {
         <div v-if="isCreatePackOpen" class="p-4 space-y-3">
           <p class="text-xs font-bold text-slate-500 uppercase">Новый пак стикеров</p>
           <input v-model="newPackName" type="text" placeholder="Название пака..."
-                 class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-purple-500 select-text text-slate-900 dark:text-slate-100">
+                 class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 select-text text-slate-900 dark:text-slate-100">
           <button @click="createPack" :disabled="creatingPack || !newPackName.trim()"
-                  class="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95 transition-all disabled:opacity-50">
+                  class="w-full bg-blue-600 text-white font-bold py-2 rounded-xl text-sm active:scale-95 transition-all disabled:opacity-50">
             {{ creatingPack ? 'Создаём...' : 'Создать' }}
           </button>
         </div>
@@ -96,11 +96,11 @@ const uploadSticker = async (event: Event) => {
           <div class="flex items-center justify-between px-3 pt-3 pb-2 border-b border-slate-200 dark:border-slate-800">
             <p class="text-xs font-bold text-slate-500 truncate">{{ activePack.name }}</p>
             <label v-if="activePack.createdByMe"
-                   class="cursor-pointer w-7 h-7 rounded-lg bg-purple-600/20 hover:bg-purple-600/40 border border-purple-500/30 flex items-center justify-center transition-all active:scale-90">
-              <svg v-if="!uploadingSticker" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                   class="cursor-pointer w-7 h-7 rounded-lg bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 flex items-center justify-center transition-all active:scale-90">
+              <svg v-if="!uploadingSticker" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
               </svg>
-              <div v-else class="w-3 h-3 border border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+              <div v-else class="w-3 h-3 border border-blue-400 border-t-transparent rounded-full animate-spin"></div>
               <input type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4" @change="uploadSticker">
             </label>
           </div>
@@ -120,7 +120,12 @@ const uploadSticker = async (event: Event) => {
 
         <div v-else-if="!isCreatePackOpen"
              class="flex flex-col items-center justify-center h-full opacity-30 p-4 text-center">
-          <p class="text-2xl mb-2">🎭</p>
+          <svg viewBox="0 0 24 24" class="w-7 h-7 mb-2" fill="none" stroke="currentColor" stroke-width="1.75">
+            <rect x="3" y="3" width="18" height="18" rx="4"/>
+            <circle cx="8.5" cy="9" r="1.25" fill="currentColor" stroke="none"/>
+            <circle cx="15.5" cy="9" r="1.25" fill="currentColor" stroke="none"/>
+            <path d="M7 14.5C8.5 17 15.5 17 17 14.5" stroke-linecap="round"/>
+          </svg>
           <p class="text-xs">Нет стикеров. Нажми + чтобы создать пак</p>
         </div>
       </div>

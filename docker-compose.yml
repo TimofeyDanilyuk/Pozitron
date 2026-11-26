@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: pozitron-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pozitron
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5434:5432"
+    volumes:
+      - pozitron_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  pozitron_postgres_data:

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: 'https://pozitron-production.up.railway.app/api'
+  baseURL: 'http://localhost:5088/api'
 });
 
 api.interceptors.request.use(config => {

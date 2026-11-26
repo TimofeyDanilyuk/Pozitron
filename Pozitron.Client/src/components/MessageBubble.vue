@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref } from 'vue';
 import AudioPlayer from './AudioPlayer.vue';
 import MediaViewer from './MediaViewer.vue';
@@ -29,9 +29,9 @@ const openMedia = (url: string, type: 'Image' | 'Video') => {
     <!-- Превью ответа -->
     <div v-if="msg.replyToUsername"
          @click="msg.replyToMessageId && scrollToMessage(msg.replyToMessageId)"
-         :class="['mb-1 px-2 py-1 rounded-xl border-l-2 border-purple-400 text-xs opacity-70 max-w-full cursor-pointer hover:opacity-100 transition-opacity',
+         :class="['mb-1 px-2 py-1 rounded-xl border-l-2 border-blue-400 text-xs opacity-70 max-w-full cursor-pointer hover:opacity-100 transition-opacity',
            isOwn ? 'bg-white/10' : 'bg-slate-300/50 dark:bg-slate-700/50']">
-      <p class="font-bold text-purple-400 truncate">{{ msg.replyToUsername }}</p>
+      <p class="font-bold text-blue-400 truncate">{{ msg.replyToUsername }}</p>
       <p class="truncate text-slate-600 dark:text-slate-300">{{ msg.replyToContent }}</p>
     </div>
 
@@ -54,7 +54,7 @@ const openMedia = (url: string, type: 'Image' | 'Video') => {
            draggable="false" oncontextmenu="return false"
            @click="openMedia(getResolvedUrl(msg.attachmentUrl), 'Image')">
       <div v-else class="max-w-xs h-32 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-        <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+        <div class="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
       </div>
       <span v-if="isOwn" class="absolute bottom-1 right-1 opacity-70">
         <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -77,7 +77,7 @@ const openMedia = (url: string, type: 'Image' | 'Video') => {
         </div>
       </div>
       <div v-else class="max-w-xs h-32 rounded-2xl bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
-        <div class="w-5 h-5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin"></div>
+        <div class="w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
       </div>
       <span v-if="isOwn" class="absolute bottom-1 right-1 opacity-70">
         <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-white/80 stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -97,7 +97,7 @@ const openMedia = (url: string, type: 'Image' | 'Video') => {
     <div v-else :class="[
       'px-3 py-2 rounded-2xl text-sm break-words leading-relaxed',
       isOwn
-        ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-br-sm'
+        ? 'bg-blue-600 text-white rounded-br-sm'
         : 'bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-sm'
     ]">
       {{ msg.content }}
@@ -114,7 +114,7 @@ const openMedia = (url: string, type: 'Image' | 'Video') => {
               @click="addReaction(msg.id, r.emoji)"
               :class="['flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all active:scale-90 border',
                 r.userIds.some(id => id.toLowerCase() === currentUserId.toLowerCase())
-                  ? 'bg-purple-100 dark:bg-purple-600/30 border-purple-400 text-purple-700 dark:text-purple-300'
+                  ? 'bg-blue-100 dark:bg-blue-600/30 border-blue-400 text-blue-700 dark:text-blue-300'
                   : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300']">
         <span>{{ r.emoji }}</span>
         <span class="font-bold">{{ r.count }}</span>

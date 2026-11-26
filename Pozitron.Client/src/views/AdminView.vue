@@ -1,8 +1,9 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../store/auth';
 import api from '../api';
+import { ChevronLeft, Settings, BarChart3, Users, MessageSquare, User, Folder, Ban } from 'lucide-vue-next';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -140,15 +141,14 @@ onMounted(() => loadStats());
       <div class="flex items-center gap-3">
         <!-- Кнопка назад в чат -->
         <button @click="router.push('/chat')"
-                class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-800 active:bg-slate-700 transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
-            <defs><linearGradient id="g" x1="0" y1="0" x2="24" y2="24">
-            <stop offset="0%" stop-color="#7C5CFF"/><stop offset="100%" stop-color="#37C8FF"/></linearGradient></defs>
-            <path d="M15 6L9 12L15 18" stroke="url(#g)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+                class="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-800 active:bg-slate-700 transition-all text-blue-400">
+          <ChevronLeft class="w-5 h-5" />
         </button>
         <div>
-          <h1 class="text-lg font-black tracking-tight">⚙️ Админ панель</h1>
+          <h1 class="text-lg font-bold tracking-tight flex items-center gap-2">
+            <Settings class="w-4 h-4 text-slate-400" />
+            <span>Админ панель</span>
+          </h1>
           <p class="text-xs text-slate-500">Pozitron</p>
         </div>
       </div>
@@ -161,18 +161,19 @@ onMounted(() => loadStats());
     <!-- Вкладки -->
     <div class="flex gap-1 px-6 pt-6">
       <button v-for="tab in [
-        { key: 'stats', label: '📊 Статистика' },
-        { key: 'users', label: '👥 Пользователи' },
-        { key: 'messages', label: '💬 Сообщения' }
+        { key: 'stats', label: 'Статистика', icon: BarChart3 },
+        { key: 'users', label: 'Пользователи', icon: Users },
+        { key: 'messages', label: 'Сообщения', icon: MessageSquare }
       ]" :key="tab.key"
         @click="switchTab(tab.key as any)"
         :class="[
-          'px-4 py-2 rounded-xl text-sm font-bold transition-all',
+          'px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-2',
           activeTab === tab.key
-            ? 'bg-purple-600 text-white shadow-lg'
+            ? 'bg-blue-600 text-white'
             : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
         ]">
-        {{ tab.label }}
+        <component :is="tab.icon" class="w-4 h-4" />
+        <span>{{ tab.label }}</span>
       </button>
     </div>
 
@@ -180,22 +181,22 @@ onMounted(() => loadStats());
 
       <!-- Загрузка -->
       <div v-if="loading" class="flex justify-center py-20 opacity-40">
-        <div class="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+        <div class="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
 
       <!-- ===== СТАТИСТИКА ===== -->
       <div v-if="!loading && activeTab === 'stats' && stats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div v-for="item in [
-          { label: 'Пользователей', value: stats.totalUsers, icon: '👤', color: 'from-purple-600 to-indigo-600' },
-          { label: 'Сообщений', value: stats.totalMessages, icon: '💬', color: 'from-blue-600 to-cyan-600' },
-          { label: 'Чатов', value: stats.totalChats, icon: '🗂️', color: 'from-green-600 to-teal-600' },
-          { label: 'Заблокировано', value: stats.bannedUsers, icon: '🚫', color: 'from-red-600 to-orange-600' },
+          { label: 'Пользователей', value: stats.totalUsers, icon: User, color: 'bg-blue-500/15 text-blue-400 border-blue-500/20' },
+          { label: 'Сообщений', value: stats.totalMessages, icon: MessageSquare, color: 'bg-sky-500/15 text-sky-400 border-sky-500/20' },
+          { label: 'Чатов', value: stats.totalChats, icon: Folder, color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20' },
+          { label: 'Заблокировано', value: stats.bannedUsers, icon: Ban, color: 'bg-red-500/15 text-red-400 border-red-500/20' },
         ]" :key="item.label"
-          class="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-          <div :class="['w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center text-xl mb-3', item.color]">
-            {{ item.icon }}
+          class="bg-slate-800/50 border border-slate-700/70 rounded-2xl p-5">
+          <div :class="['w-10 h-10 rounded-xl border flex items-center justify-center mb-3', item.color]">
+            <component :is="item.icon" class="w-5 h-5" />
           </div>
-          <p class="text-2xl font-black">{{ item.value }}</p>
+          <p class="text-2xl font-bold">{{ item.value }}</p>
           <p class="text-xs text-slate-500 mt-1">{{ item.label }}</p>
         </div>
       </div>
@@ -207,7 +208,7 @@ onMounted(() => loadStats());
 
           <!-- Аватар -->
           <img v-if="user.avatarUrl" :src="user.avatarUrl" class="w-10 h-10 rounded-xl object-cover shrink-0">
-          <div v-else class="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 flex items-center justify-center font-bold text-sm shrink-0">
+          <div v-else class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
             {{ user.username?.[0]?.toUpperCase() }}
           </div>
 
@@ -217,7 +218,7 @@ onMounted(() => loadStats());
               <span class="font-bold text-sm">{{ user.emojiPrefix }} {{ user.username }}</span>
               <!-- Бейдж роли -->
               <span v-if="user.role === 1"
-                    class="px-2 py-0.5 bg-purple-600/30 text-purple-300 text-[10px] font-bold rounded-full border border-purple-500/30">
+                    class="px-2 py-0.5 bg-blue-600/30 text-blue-300 text-[10px] font-bold rounded-full border border-blue-500/30">
                 ADMIN
               </span>
               <!-- Бейдж бана -->
@@ -276,7 +277,7 @@ onMounted(() => loadStats());
              class="bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 flex items-start gap-3">
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2 mb-1">
-              <span class="text-xs font-bold text-purple-400">{{ msg.username }}</span>
+              <span class="text-xs font-bold text-blue-400">{{ msg.username }}</span>
               <span class="text-[10px] text-slate-600">в {{ msg.chatName }}</span>
               <span class="text-[10px] text-slate-600">· {{ formatDate(msg.sentAt) }}</span>
             </div>
@@ -302,14 +303,14 @@ onMounted(() => loadStats());
           <h3 class="font-black text-lg mb-1">Сброс пароля</h3>
           <p class="text-sm text-slate-500 mb-4">Пользователь: <span class="text-white font-bold">{{ resetPasswordUser?.username }}</span></p>
           <input v-model="newPassword" type="text" placeholder="Новый пароль"
-                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-purple-500 mb-4 select-text">
+                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-1 focus:ring-blue-500 mb-4 select-text">
           <div class="flex gap-3">
             <button @click="resetPasswordModal = false"
                     class="flex-1 bg-slate-800 hover:bg-slate-700 font-bold py-3 rounded-xl text-sm transition-all active:scale-95">
               Отмена
             </button>
             <button @click="submitResetPassword" :disabled="resetLoading || !newPassword.trim()"
-                    class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 rounded-xl text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">
+                    class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50">
               {{ resetLoading ? 'Сохраняем...' : 'Сохранить' }}
             </button>
           </div>

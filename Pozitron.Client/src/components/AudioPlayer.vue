@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import api from '../api';
 
@@ -159,7 +159,7 @@ onUnmounted(() => {
 <template>
   <div :class="['flex items-center gap-3 px-3 py-2.5 rounded-2xl select-none w-64',
     isOwn
-      ? 'bg-gradient-to-r from-purple-600 to-indigo-600'
+      ? 'bg-blue-600'
       : 'bg-slate-200 dark:bg-slate-800']">
 
     <!-- Кнопка Play/Pause -->
@@ -167,7 +167,7 @@ onUnmounted(() => {
             :class="['w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all active:scale-90',
               isOwn
                 ? 'bg-white/20 hover:bg-white/30'
-                : 'bg-purple-500 hover:bg-purple-600']">
+                : 'bg-blue-500 hover:bg-blue-600']">
       <!-- Загрузка -->
       <div v-if="isLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
       <!-- Play -->
@@ -188,7 +188,7 @@ onUnmounted(() => {
         <div v-for="(h, i) in waveHeights" :key="i"
              :class="['rounded-sm transition-colors duration-75 shrink-0',
                i / BARS <= progress
-                 ? (isOwn ? 'bg-white' : 'bg-purple-500')
+                 ? (isOwn ? 'bg-white' : 'bg-blue-500')
                  : (isOwn ? 'bg-white/30' : 'bg-slate-400 dark:bg-slate-500')]"
              :style="{ width: '3px', height: `${Math.round(h * 28) + 2}px` }">
         </div>
