@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
+import api from '../api';
 import { useRouter } from 'vue-router';
 import { useTheme } from '../composables/useTheme';
 import { useBlobCache } from '../composables/useBlobCache';
@@ -584,25 +585,42 @@ const saveProfile = async () => {
 };
 const triggerFileInput = () => document.getElementById('avatarInput')?.click();
 const avatarCropModal = ref<{ url: string; zoom: number; offsetX: number; offsetY: number } | null>(null);
+const viewerAvatars = ref<string[]>([]);
 const avatarViewerIndex = ref<number | null>(null);
 const userAvatars = ref<string[]>([]);
+const peerProfileModal = ref<{ userId: string; username: string; avatarUrl?: string; emojiPrefix?: string; avatars: string[] } | null>(null);
 
-const loadUserAvatars = () => {
+const loadUserAvatars = async () => {
   if (!auth.user?.id) return;
-  const key = `userAvatars_${auth.user.id}`;
-  const saved: string[] = JSON.parse(localStorage.getItem(key) || '[]');
-  const current = auth.user.avatarUrl;
-  if (current && !saved.includes(current)) saved.unshift(current);
-  userAvatars.value = saved;
-  localStorage.setItem(key, JSON.stringify(saved));
+  try {
+    const { data } = await api.get<string[]>(`/user/${auth.user.id}/avatars`);
+    userAvatars.value = data;
+  } catch {
+    userAvatars.value = auth.user.avatarUrl ? [auth.user.avatarUrl] : [];
+  }
 };
 
-const addAvatarToHistory = (url?: string) => {
-  if (!url || !auth.user?.id) return;
-  const key = `userAvatars_${auth.user.id}`;
-  const list = [url, ...userAvatars.value.filter(u => u !== url)];
-  userAvatars.value = list;
-  localStorage.setItem(key, JSON.stringify(list));
+const openAvatarViewer = (list: string[], index: number) => {
+  if (list.length === 0) return;
+  viewerAvatars.value = list;
+  avatarViewerIndex.value = index;
+};
+
+const openPeerProfile = async (user: { userId: string; username: string; avatarUrl?: string; emojiPrefix?: string }) => {
+  if (user.userId === auth.user?.id) {
+    openProfile();
+    return;
+  }
+  peerProfileModal.value = {
+    ...user,
+    avatars: user.avatarUrl ? [user.avatarUrl] : []
+  };
+  try {
+    const { data } = await api.get<string[]>(`/user/${user.userId}/avatars`);
+    if (peerProfileModal.value && peerProfileModal.value.userId === user.userId) {
+      peerProfileModal.value.avatars = data;
+    }
+  } catch { /* fallback to single avatar */ }
 };
 
 const onFileSelected = (event: Event) => {
@@ -641,7 +659,7 @@ const confirmAvatarCrop = async () => {
       img.src = url;
     });
     await auth.uploadAvatar(file);
-    addAvatarToHistory(auth.user?.avatarUrl);
+    await loadUserAvatars();
     URL.revokeObjectURL(url);
     avatarCropModal.value = null;
   } catch (e: any) {
@@ -998,8 +1016,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                   <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
                 </svg>
               </div>
-              <img v-if="item.msg.avatarUrl" :src="item.msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
-              <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ item.msg.username?.[0]?.toUpperCase() }}</div>
+              <img v-if="item.msg.avatarUrl" :src="item.msg.avatarUrl" @click.stop="openPeerProfile(item.msg)" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5 cursor-pointer hover:opacity-85">
+              <div v-else @click.stop="openPeerProfile(item.msg)" class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white cursor-pointer hover:opacity-85">{{ item.msg.username?.[0]?.toUpperCase() }}</div>
 
               <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
                 <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.msg.emojiPrefix }} {{ item.msg.username }} · {{ formatTime(item.msg.sentAt) }}</span>
@@ -1423,7 +1441,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <div class="px-6 pb-8">
             <div class="relative -mt-10 mb-3 flex justify-center">
               <div class="relative">
-                <div @click="userAvatars.length > 0 ? (avatarViewerIndex = 0) : triggerFileInput()" class="cursor-pointer">
+                <div @click="userAvatars.length > 0 ? openAvatarViewer(userAvatars, 0) : triggerFileInput()" class="cursor-pointer">
                   <img v-if="currentAvatar" :src="currentAvatar" class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 object-cover shadow-xl">
                   <div v-else class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-2xl font-bold uppercase">{{ auth.user?.username?.[0] }}</div>
                 </div>
@@ -1436,7 +1454,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
             <!-- Миниатюры всех загруженных аватаров -->
             <div v-if="userAvatars.length > 1" class="flex justify-center gap-1.5 mb-3 overflow-x-auto thin-scroll py-1">
-              <img v-for="(av, idx) in userAvatars" :key="av" :src="av" @click="avatarViewerIndex = idx"
+              <img v-for="(av, idx) in userAvatars" :key="av" :src="av" @click="openAvatarViewer(userAvatars, idx)"
                    :class="['w-8 h-8 rounded-lg object-cover cursor-pointer border transition-all', idx === 0 ? 'border-[#3D7A5E] ring-1 ring-[#3D7A5E]' : 'border-transparent opacity-70 hover:opacity-100']">
             </div>
             <div class="text-center mb-5"><h3 class="text-xl font-black">{{ auth.user?.username }}</h3></div>
@@ -1621,24 +1639,53 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       </div>
     </Transition>
 
+    <!-- МОДАЛКА ПРОФИЛЯ СОБЕСЕДНИКА -->
+    <Transition name="fade">
+      <div v-if="peerProfileModal" @click="peerProfileModal = null" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div @click.stop class="surface-sheet rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl">
+          <div class="h-20 bg-gradient-to-r from-[#3D7A5E] to-[#2c5944] relative">
+            <button @click="peerProfileModal = null" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/20 text-white flex items-center justify-center hover:bg-black/40">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="px-6 pb-6">
+            <div class="relative -mt-10 mb-3 flex justify-center">
+              <div @click="peerProfileModal.avatars.length > 0 && openAvatarViewer(peerProfileModal.avatars, 0)" class="cursor-pointer">
+                <img v-if="peerProfileModal.avatarUrl" :src="peerProfileModal.avatarUrl" class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 object-cover shadow-xl">
+                <div v-else class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-2xl font-bold uppercase">{{ peerProfileModal.username?.[0] }}</div>
+              </div>
+            </div>
+            <div v-if="peerProfileModal.avatars.length > 1" class="flex justify-center gap-1.5 mb-3 overflow-x-auto thin-scroll py-1">
+              <img v-for="(av, idx) in peerProfileModal.avatars" :key="av" :src="av" @click="openAvatarViewer(peerProfileModal.avatars, idx)"
+                   :class="['w-8 h-8 rounded-lg object-cover cursor-pointer border transition-all', idx === 0 ? 'border-[#3D7A5E] ring-1 ring-[#3D7A5E]' : 'border-transparent opacity-70 hover:opacity-100']">
+            </div>
+            <div class="text-center">
+              <h3 class="text-lg font-bold">{{ peerProfileModal.emojiPrefix }} {{ peerProfileModal.username }}</h3>
+              <p class="text-xs text-slate-400 mt-1">Нажмите на аватар для просмотра</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- ПОЛНОЭКРАННЫЙ ПРОСМОТР АВАТАРОВ -->
     <Transition name="fade">
-      <div v-if="avatarViewerIndex !== null && userAvatars[avatarViewerIndex]" @click="avatarViewerIndex = null"
+      <div v-if="avatarViewerIndex !== null && viewerAvatars[avatarViewerIndex]" @click="avatarViewerIndex = null"
            class="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
         <button @click.stop="avatarViewerIndex = null" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
           <X class="w-5 h-5" />
         </button>
-        <button v-if="userAvatars.length > 1" @click.stop="avatarViewerIndex = (avatarViewerIndex - 1 + userAvatars.length) % userAvatars.length"
+        <button v-if="viewerAvatars.length > 1" @click.stop="avatarViewerIndex = (avatarViewerIndex - 1 + viewerAvatars.length) % viewerAvatars.length"
                 class="absolute left-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
           <ChevronLeft class="w-6 h-6" />
         </button>
-        <img :src="userAvatars[avatarViewerIndex]" @click.stop class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl">
-        <button v-if="userAvatars.length > 1" @click.stop="avatarViewerIndex = (avatarViewerIndex + 1) % userAvatars.length"
+        <img :src="viewerAvatars[avatarViewerIndex]" @click.stop class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl">
+        <button v-if="viewerAvatars.length > 1" @click.stop="avatarViewerIndex = (avatarViewerIndex + 1) % viewerAvatars.length"
                 class="absolute right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
           <ChevronRight class="w-6 h-6" />
         </button>
-        <div v-if="userAvatars.length > 1" class="absolute bottom-6 px-3 py-1 rounded-full bg-white/10 text-white text-xs font-mono">
-          {{ avatarViewerIndex + 1 }} / {{ userAvatars.length }}
+        <div v-if="viewerAvatars.length > 1" class="absolute bottom-6 px-3 py-1 rounded-full bg-white/10 text-white text-xs font-mono">
+          {{ avatarViewerIndex + 1 }} / {{ viewerAvatars.length }}
         </div>
       </div>
     </Transition>

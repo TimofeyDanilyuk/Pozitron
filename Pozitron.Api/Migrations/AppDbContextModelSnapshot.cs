@@ -231,6 +231,29 @@ namespace Pozitron.Api.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("Pozitron.Api.Entitites.UserAvatar", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("UserAvatars");
+                });
+
             modelBuilder.Entity("Pozitron.Api.Entitites.UserStickerPack", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -346,6 +369,17 @@ namespace Pozitron.Api.Migrations
                     b.Navigation("CreatedByUser");
                 });
 
+            modelBuilder.Entity("Pozitron.Api.Entitites.UserAvatar", b =>
+                {
+                    b.HasOne("Pozitron.Api.Entitites.User", "User")
+                        .WithMany("Avatars")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Pozitron.Api.Entitites.UserStickerPack", b =>
                 {
                     b.HasOne("Pozitron.Api.Entitites.StickerPack", "Pack")
@@ -405,6 +439,8 @@ namespace Pozitron.Api.Migrations
 
             modelBuilder.Entity("Pozitron.Api.Entitites.User", b =>
                 {
+                    b.Navigation("Avatars");
+
                     b.Navigation("Contacts");
 
                     b.Navigation("Messages");

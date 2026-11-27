@@ -120,6 +120,22 @@ namespace Pozitron.Api.Controllers
             return Ok();
         }
 
+        [HttpGet("{userId}/avatars")]
+        public async Task<IActionResult> GetUserAvatars(Guid userId)
+        {
+            var avatars = await _context.UserAvatars
+                .Where(a => a.UserId == userId)
+                .OrderByDescending(a => a.CreatedAt)
+                .Select(a => a.Url)
+                .ToListAsync();
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user?.AvatarUrl != null && !avatars.Contains(user.AvatarUrl))
+                avatars.Insert(0, user.AvatarUrl);
+
+            return Ok(avatars);
+        }
+
         [HttpPost("upload-avatar")]
         public async Task<IActionResult> UploadAvatar(IFormFile file)
         {
@@ -152,6 +168,13 @@ namespace Pozitron.Api.Controllers
                 if (user == null) return NotFound("Пользователь не найден");
 
                 user.AvatarUrl = avatarUrl;
+                _context.UserAvatars.Add(new UserAvatar
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = userId,
+                    Url = avatarUrl,
+                    CreatedAt = DateTime.UtcNow
+                });
                 await _context.SaveChangesAsync();
 
                 return Ok(new { avatarUrl });

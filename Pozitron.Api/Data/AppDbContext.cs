@@ -20,6 +20,7 @@ namespace Pozitron.Api.Data
         public DbSet<UserStickerPack> UserStickerPacks => Set<UserStickerPack>();
         public DbSet<UserContact> UserContacts => Set<UserContact>();
         public DbSet<MessageReaction> MessageReactions => Set<MessageReaction>();
+        public DbSet<UserAvatar> UserAvatars => Set<UserAvatar>();
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

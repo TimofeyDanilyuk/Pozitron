@@ -21,6 +21,16 @@ namespace Pozitron.Api.Entitites
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public List<Message> Messages { get; set; } = new();
+        public List<UserAvatar> Avatars { get; set; } = new();
+    }
+
+    public class UserAvatar
+    {
+        public Guid Id { get; set; }
+        public Guid UserId { get; set; }
+        public User? User { get; set; }
+        public string Url { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
     public enum UserRole
