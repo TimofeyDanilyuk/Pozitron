@@ -47,7 +47,7 @@ const chat = useChatStore();
 const router = useRouter();
 
 const { isDark, initTheme, toggleTheme } = useTheme();
-const { resolveUrl } = useBlobCache();
+const { resolveUrl, getResolvedUrl } = useBlobCache();
 
 const isProfileOpen = ref(false);
 const isSaving = ref(false);
@@ -508,6 +508,12 @@ watch(currentMessages, (msgs, prevMsgs) => {
   if (msgs.length > (prevMsgs?.length ?? 0)) {
     scrollToBottom();
   }
+  for (const msg of msgs) {
+    if (msg.attachmentUrl) resolveUrl(msg.attachmentUrl);
+  }
+}, { deep: true });
+
+watch(splitMessages, (msgs) => {
   for (const msg of msgs) {
     if (msg.attachmentUrl) resolveUrl(msg.attachmentUrl);
   }
@@ -1036,8 +1042,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                      style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
                      class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
                   <div v-for="m in item.items" :key="m.id" class="aspect-square rounded-xl overflow-hidden bg-black/10">
-                    <img v-if="m.type === 'Image'" :src="m.attachmentUrl" draggable="false" class="w-full h-full object-cover pointer-events-none" loading="lazy">
-                    <video v-else :src="m.attachmentUrl" controls class="w-full h-full object-cover"></video>
+                    <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" draggable="false" class="w-full h-full object-cover pointer-events-none" loading="lazy">
+                    <video v-else :src="getResolvedUrl(m.attachmentUrl)" controls class="w-full h-full object-cover"></video>
                   </div>
                 </div>
               </div>
@@ -1290,8 +1296,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
               <div class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
                 <div v-for="m in item.items" :key="m.id" class="aspect-square rounded-xl overflow-hidden bg-black/10">
-                  <img v-if="m.type === 'Image'" :src="m.attachmentUrl" class="w-full h-full object-cover" loading="lazy">
-                  <video v-else :src="m.attachmentUrl" controls class="w-full h-full object-cover"></video>
+                  <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" class="w-full h-full object-cover" loading="lazy">
+                  <video v-else :src="getResolvedUrl(m.attachmentUrl)" controls class="w-full h-full object-cover"></video>
                 </div>
               </div>
             </div>
@@ -1627,7 +1633,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <div v-else-if="attachmentsModal.tab === 'media'" class="grid grid-cols-3 gap-2">
               <div v-for="m in modalAttachmentMessages" :key="m.id" @click="scrollToMessage(m.id); attachmentsModal = null"
                    class="aspect-square rounded-xl overflow-hidden bg-black/10 cursor-pointer hover:opacity-85 transition-opacity">
-                <img v-if="m.type === 'Image' && m.attachmentUrl" :src="m.attachmentUrl" class="w-full h-full object-cover">
+                <img v-if="m.type === 'Image' && m.attachmentUrl" :src="getResolvedUrl(m.attachmentUrl)" class="w-full h-full object-cover">
                 <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
                   <Video class="w-6 h-6" />
                 </div>
