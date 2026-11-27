@@ -262,7 +262,7 @@ const showContextMenu = (event: TouchEvent | MouseEvent, msg: any) => {
   const clientY = isTouchEvent ? (event.changedTouches[0]?.clientY ?? 0) : (event as MouseEvent).clientY;
   contextMenu.value = {
     x: Math.max(12, Math.min(clientX, window.innerWidth - 190)),
-    y: Math.max(12, Math.min(clientY, window.innerHeight - 240)),
+    y: Math.max(12, Math.min(clientY, window.innerHeight - 310)),
     msg
   };
   reactionPicker.value = null;
@@ -501,7 +501,7 @@ const confirmAddContacts = async () => {
 type DisplayItem =
   | { kind: 'single'; id: string; msg: any }
   | { kind: 'album'; id: string; primary: any; items: any[] }
-  | { kind: 'forwarded'; id: string; primary: any; author: string; items: { msg: any; body: string }[] };
+  | { kind: 'forwarded'; id: string; primary: any; author: string; items: { msg: any; author: string; body: string }[] };
 
 const parseForwarded = (content?: string) => {
   if (!content) return null;
@@ -522,7 +522,7 @@ const groupMessagesForDisplay = (msgs: any[]): DisplayItem[] => {
       const prevFwd = prev.kind === 'forwarded' ? { author: prev.author } : (prev.kind === 'single' ? parseForwarded(prev.msg.content) : null);
       const sameSender = prevMsg.userId === msg.userId;
       const closeInTime = Math.abs(new Date(msg.sentAt).getTime() - new Date(prevMsg.sentAt).getTime()) <= 10000;
-      if (prevFwd && prevFwd.author === fwd.author && sameSender && closeInTime) {
+      if (prevFwd && sameSender && closeInTime) {
         if (prev.kind === 'single') {
           const firstFwd = parseForwarded(prev.msg.content)!;
           result[result.length - 1] = {
@@ -530,10 +530,10 @@ const groupMessagesForDisplay = (msgs: any[]): DisplayItem[] => {
             id: `fwd-${prev.msg.id}`,
             primary: prev.msg,
             author: fwd.author,
-            items: [{ msg: prev.msg, body: firstFwd.body }, { msg, body: fwd.body }]
+            items: [{ msg: prev.msg, author: firstFwd.author, body: firstFwd.body }, { msg, author: fwd.author, body: fwd.body }]
           };
         } else if (prev.kind === 'forwarded') {
-          prev.items.push({ msg, body: fwd.body });
+          prev.items.push({ msg, author: fwd.author, body: fwd.body });
         }
         continue;
       }
@@ -1195,11 +1195,24 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                 <div class="px-3.5 py-2.5 rounded-2xl border border-[#3D7A5E]/30 border-l-[3px] border-l-[#3D7A5E] bg-[var(--own-msg-bg)] space-y-1.5">
                   <div class="flex items-center gap-1.5 text-[11px] font-semibold text-[#3D7A5E]">
                     <Forward class="w-3.5 h-3.5 shrink-0" />
-                    <span>Переслано от {{ item.author }}</span>
+                    <span>Переслано</span>
                   </div>
                   <div v-for="sub in item.items" :key="sub.msg.id"
                        class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] text-sm">
-                    {{ sub.body }}
+                    <div class="flex items-center gap-1.5 mb-0.5">
+                      <span class="w-4 h-4 rounded-full bg-[#3D7A5E]/20 text-[#3D7A5E] text-[9px] font-bold flex items-center justify-center shrink-0">
+                        {{ sub.author[0]?.toUpperCase() }}
+                      </span>
+                      <span class="text-[11px] font-semibold text-[#3D7A5E] truncate">{{ sub.author }}</span>
+                    </div>
+                    <div class="flex items-end justify-between gap-2">
+                      <span>{{ sub.body }}</span>
+                      <span v-if="item.primary.userId === auth.user?.id && sub === item.items[item.items.length - 1]"
+                            class="inline-flex items-center shrink-0 opacity-90 text-[#3D7A5E]">
+                        <svg v-if="!sub.msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-current stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-current stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1210,10 +1223,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                  :class="['flex gap-2 items-end transition-colors rounded-xl px-1',
                    item.msg.userId === auth.user?.id ? 'flex-row-reverse' : '',
                    isSelecting && selectedMessages.has(item.msg.id) ? 'bg-[#3D7A5E]/15' : '']"
-                 @click="isSelecting && item.msg.userId === auth.user?.id ? toggleSelectMessage(item.msg.id) : null">
+                 @click="isSelecting ? toggleSelectMessage(item.msg.id) : null">
 
-              <!-- Чекбокс выделения (только свои) -->
-              <div v-if="isSelecting && item.msg.userId === auth.user?.id"
+              <!-- Чекбокс выделения -->
+              <div v-if="isSelecting"
                    :class="['shrink-0 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
                      selectedMessages.has(item.msg.id) ? 'bg-[#3D7A5E] border-[#3D7A5E]' : 'border-slate-300 dark:border-slate-600']"
                    :style="item.msg.userId === auth.user?.id ? 'order: -1' : ''">
@@ -1778,12 +1791,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <Forward class="w-4 h-4 shrink-0" />
             Переслать
           </button>
+          <button @click="onSelectFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
+            <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Выбрать
+          </button>
           <!-- Только для своих сообщений -->
           <template v-if="contextMenu.msg.userId === auth.user?.id">
-            <button @click="onSelectFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
-              <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Выбрать
-            </button>
             <button @click="onDeleteFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all active:bg-red-100 dark:active:bg-red-500/20 border-t border-slate-100 dark:border-slate-800">
               <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Удалить
