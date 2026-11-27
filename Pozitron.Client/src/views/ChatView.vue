@@ -222,7 +222,11 @@ const showContextMenu = (event: TouchEvent | MouseEvent, msg: any) => {
   const isTouchEvent = event instanceof TouchEvent;
   const clientX = isTouchEvent ? (event.changedTouches[0]?.clientX ?? 0) : (event as MouseEvent).clientX;
   const clientY = isTouchEvent ? (event.changedTouches[0]?.clientY ?? 0) : (event as MouseEvent).clientY;
-  contextMenu.value = { x: Math.min(clientX, window.innerWidth - 168), y: Math.min(clientY, window.innerHeight - 120), msg };
+  contextMenu.value = {
+    x: Math.max(12, Math.min(clientX, window.innerWidth - 190)),
+    y: Math.max(12, Math.min(clientY, window.innerHeight - 240)),
+    msg
+  };
   reactionPicker.value = null;
 };
 const closeContextMenu = () => { contextMenu.value = null; reactionPicker.value = null; };
@@ -233,7 +237,11 @@ const onReplyFromMenu = () => {
 };
 const onReactFromMenu = () => {
   if (!contextMenu.value) return;
-  reactionPicker.value = { x: contextMenu.value.x, y: contextMenu.value.y, msgId: contextMenu.value.msg.id };
+  reactionPicker.value = {
+    x: Math.max(12, Math.min(contextMenu.value.x, window.innerWidth - 280)),
+    y: Math.max(12, Math.min(contextMenu.value.y, window.innerHeight - 72)),
+    msgId: contextMenu.value.msg.id
+  };
   contextMenu.value = null;
 };
 const sendReaction = async (emoji: string) => {
