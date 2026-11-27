@@ -356,7 +356,7 @@ const confirmForwardToChat = async (targetChatId: string) => {
   cancelSelection();
   for (const m of msgs) {
     const body = m.content || (m.type === 'Image' ? 'Изображение' : m.type === 'Video' ? 'Видео' : m.type === 'Voice' ? 'Голосовое' : 'Сообщение');
-    await chat.sendMessage(`↪ Переслано от ${m.username || 'Пользователь'}:\n${body}`, targetChatId);
+    await chat.sendMessage(`Переслано от ${m.username || 'Пользователь'}:\n${body}`, targetChatId);
   }
 };
 
