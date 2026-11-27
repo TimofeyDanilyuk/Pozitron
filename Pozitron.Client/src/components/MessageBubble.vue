@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
+import { Forward } from 'lucide-vue-next';
 import AudioPlayer from './AudioPlayer.vue';
 import MediaViewer from './MediaViewer.vue';
 import { useBlobCache } from '../composables/useBlobCache';
@@ -22,6 +23,13 @@ const viewer = ref<{ url: string; type: 'Image' | 'Video' } | null>(null);
 const openMedia = (url: string, type: 'Image' | 'Video') => {
   viewer.value = { url, type };
 };
+
+const forwardedData = computed(() => {
+  const text = props.msg.content || '';
+  const match = text.match(/^(?:↪\s*)?Переслано от ([^:\n]+):\n([\s\S]*)$/);
+  if (!match) return null;
+  return { author: match[1]!.trim(), body: match[2]!.trim() };
+});
 </script>
 
 <template>
@@ -108,7 +116,16 @@ const openMedia = (url: string, type: 'Image' | 'Video') => {
         borderColor: 'var(--border-hairline)',
         color: 'var(--text-ink)'
       }">
-      <span>{{ msg.content }}</span>
+      <template v-if="forwardedData">
+        <div class="flex items-center gap-1.5 text-[11px] font-semibold mb-1.5 opacity-90" style="color: var(--chat-accent)">
+          <Forward class="w-3.5 h-3.5 shrink-0" />
+          <span>Переслано от {{ forwardedData.author }}</span>
+        </div>
+        <div class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06]">
+          <span>{{ forwardedData.body }}</span>
+        </div>
+      </template>
+      <span v-else>{{ msg.content }}</span>
       <!-- Индикатор прочтения для своих сообщений -->
       <span v-if="isOwn" class="inline-flex items-center ml-2.5 translate-y-0.5 opacity-90" style="color: var(--chat-accent)">
         <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-current stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
