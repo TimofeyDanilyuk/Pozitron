@@ -39,7 +39,9 @@ import {
   Trash2,
   FileText,
   Pin,
-  ArrowDown
+  ArrowDown,
+  Forward,
+  CornerUpLeft
 } from 'lucide-vue-next';
 
 const auth = useAuthStore();
@@ -208,17 +210,49 @@ const contextMenu = ref<{ x: number; y: number; msg: any } | null>(null);
 const reactionPicker = ref<{ x: number; y: number; msgId: string } | null>(null);
 const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 const pressingMsgId = ref<string | null>(null);
+const swipingMsgId = ref<string | null>(null);
+const swipeOffset = ref(0);
+let touchStartX = 0;
+let touchStartY = 0;
+let swipeTriggered = false;
 let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
 const onMessageLongPress = (event: TouchEvent | MouseEvent, msg: any) => {
   pressingMsgId.value = msg.id;
+  if (event instanceof TouchEvent && event.touches[0]) {
+    touchStartX = event.touches[0].clientX;
+    touchStartY = event.touches[0].clientY;
+    swipingMsgId.value = msg.id;
+    swipeOffset.value = 0;
+    swipeTriggered = false;
+  }
   longPressTimer = setTimeout(() => {
     pressingMsgId.value = null;
     showContextMenu(event, msg);
   }, 500);
 };
+const onMessageTouchMove = (event: TouchEvent, msg: any) => {
+  if (!event.touches[0] || swipingMsgId.value !== msg.id) return;
+  const dx = event.touches[0].clientX - touchStartX;
+  const dy = event.touches[0].clientY - touchStartY;
+  if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+    pressingMsgId.value = null;
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    // Свайп влево (или вправо) до 64px для ответа
+    const clamped = Math.max(-68, Math.min(0, dx));
+    swipeOffset.value = clamped;
+    if (clamped <= -52 && !swipeTriggered) {
+      swipeTriggered = true;
+      chat.setReply(msg);
+    }
+  } else if (Math.abs(dy) > 10) {
+    onMessageLongPressCancel();
+  }
+};
 const onMessageLongPressCancel = () => {
   pressingMsgId.value = null;
+  swipingMsgId.value = null;
+  swipeOffset.value = 0;
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
 };
 const showContextMenu = (event: TouchEvent | MouseEvent, msg: any) => {
@@ -304,6 +338,28 @@ const onSelectFromMenu = () => {
   selectedMessages.value = new Set([msgId]);
   closeContextMenu();
 };
+const forwardModalMessages = ref<any[] | null>(null);
+const onForwardFromMenu = () => {
+  if (!contextMenu.value) return;
+  forwardModalMessages.value = [contextMenu.value.msg];
+  closeContextMenu();
+};
+const forwardSelected = () => {
+  if (selectedMessages.value.size === 0) return;
+  const msgs = currentMessages.value.filter(m => selectedMessages.value.has(m.id));
+  if (msgs.length > 0) forwardModalMessages.value = msgs;
+};
+const confirmForwardToChat = async (targetChatId: string) => {
+  if (!forwardModalMessages.value) return;
+  const msgs = forwardModalMessages.value;
+  forwardModalMessages.value = null;
+  cancelSelection();
+  for (const m of msgs) {
+    const body = m.content || (m.type === 'Image' ? 'Изображение' : m.type === 'Video' ? 'Видео' : m.type === 'Voice' ? 'Голосовое' : 'Сообщение');
+    await chat.sendMessage(`↪ Переслано от ${m.username || 'Пользователь'}:\n${body}`, targetChatId);
+  }
+};
+
 const onPinFromMenu = async () => {
   if (!contextMenu.value) return;
   const msg = contextMenu.value.msg;
@@ -557,7 +613,6 @@ const openChat = async (c: any) => {
   messagesLoading.value = false;
   mobileView.value = 'chat';
 };
-const goBackToList = () => { mobileView.value = 'list'; };
 const sendMessage = async () => {
   if (uploadingAttachment.value) return;
   if (!messageInput.value.trim() && pendingFiles.value.length === 0) return;
@@ -897,7 +952,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <div v-if="chat.contactChats.length > 0" class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Личные</div>
           <div v-for="c in chat.contactChats" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
                :class="['flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors', chat.activeChat?.id === c.id ? 'bg-[#3D7A5E]/15 text-[#3D7A5E]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]']">
-            <div class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0">
+            <img v-if="c.avatarUrl" :src="c.avatarUrl" class="w-9 h-9 rounded-full object-cover shrink-0">
+            <div v-else class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0">
               <span>{{ c.name?.[0]?.toUpperCase() || '?' }}</span>
             </div>
             <div class="min-w-0 flex-1">
@@ -918,7 +974,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <div v-if="chat.otherChats.length > 0" class="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Групповые</div>
           <div v-for="c in chat.otherChats" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
                :class="['flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors', chat.activeChat?.id === c.id ? 'bg-[#3D7A5E]/15 text-[#3D7A5E]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]']">
-            <div class="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-xs font-bold shrink-0">
+            <img v-if="c.avatarUrl" :src="c.avatarUrl" class="w-9 h-9 rounded-full object-cover shrink-0">
+            <div v-else class="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-xs font-bold shrink-0">
               <Globe v-if="c.type === 0 && !c.isContact" class="w-4 h-4" />
               <span v-else>{{ c.name?.[0]?.toUpperCase() || '?' }}</span>
             </div>
@@ -947,9 +1004,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
       <header class="px-4 py-3 border-b border-slate-200/80 dark:border-white/[0.06] flex items-center justify-between z-10 shrink-0">
         <div class="flex items-center gap-2.5 min-w-0">
-          <button @click="goBackToList" class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all text-[#3D7A5E]">
-            <ChevronLeft class="w-6 h-6" />
-          </button>
           <div v-if="chat.activeChat" @click="openPeerProfileFromChat(chat.activeChat)"
                :class="['flex items-center gap-2.5 min-w-0', chat.activeChat.type === 1 ? 'cursor-pointer hover:opacity-85 transition-opacity' : '']">
             <img v-if="chat.activeChat.avatarUrl" :src="chat.activeChat.avatarUrl" class="w-9 h-9 rounded-full object-cover shrink-0">
@@ -1089,9 +1143,16 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                 <div @contextmenu.prevent="showContextMenu($event, item.msg)"
                      @touchstart="onMessageLongPress($event, item.msg)"
                      @touchend="onMessageLongPressCancel"
-                     @touchmove="onMessageLongPressCancel"
-                     :class="['transition-transform duration-150', pressingMsgId === item.msg.id ? 'scale-[0.97] opacity-85' : '']"
-                     style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;">
+                     @touchmove="onMessageTouchMove($event, item.msg)"
+                     :class="['relative transition-transform duration-150', pressingMsgId === item.msg.id ? 'scale-[0.97] opacity-85' : '']"
+                     :style="{
+                       transform: swipingMsgId === item.msg.id && swipeOffset !== 0 ? `translateX(${swipeOffset}px)` : undefined,
+                       WebkitTouchCallout: 'none',
+                       WebkitUserSelect: 'none',
+                       userSelect: 'none'
+                     }">
+                  <CornerUpLeft v-if="swipingMsgId === item.msg.id && swipeOffset <= -24"
+                                class="w-4 h-4 text-[#3D7A5E] absolute -right-6 top-1/2 -translate-y-1/2" />
                   <MessageBubble
                     :msg="item.msg"
                     :is-own="item.msg.userId === auth.user?.id"
@@ -1129,6 +1190,11 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <span class="flex-1 text-sm font-bold text-slate-700 dark:text-slate-300">
             {{ selectedMessages.size > 0 ? `Выбрано: ${selectedMessages.size}` : 'Выберите сообщения' }}
           </span>
+          <button @click="forwardSelected" :disabled="selectedMessages.size === 0"
+                  class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#3D7A5E] hover:bg-[#346950] text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-40">
+            <Forward class="w-4 h-4" />
+            Переслать
+          </button>
           <button @click="deleteSelected" :disabled="selectedMessages.size === 0"
                   class="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-40">
             <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1601,6 +1667,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <Pin class="w-4 h-4 shrink-0" />
             {{ contextMenu.msg.isPinned ? 'Открепить' : 'Закрепить' }}
           </button>
+          <button @click="onForwardFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
+            <Forward class="w-4 h-4 shrink-0" />
+            Переслать
+          </button>
           <!-- Только для своих сообщений -->
           <template v-if="contextMenu.msg.userId === auth.user?.id">
             <button @click="onSelectFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
@@ -1763,6 +1833,31 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         </button>
         <div v-if="viewerAvatars.length > 1" class="absolute bottom-6 px-3 py-1 rounded-full bg-white/10 text-white text-xs font-mono">
           {{ avatarViewerIndex + 1 }} / {{ viewerAvatars.length }}
+        </div>
+      </div>
+    </Transition>
+
+    <!-- МОДАЛКА ПЕРЕСЫЛКИ СООБЩЕНИЙ -->
+    <Transition name="fade">
+      <div v-if="forwardModalMessages" @click="forwardModalMessages = null" class="fixed inset-0 z-[65] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div @click.stop class="surface-sheet rounded-2xl w-full max-w-sm max-h-[75vh] flex flex-col overflow-hidden">
+          <div class="p-4 border-b border-slate-200/80 dark:border-white/[0.08] flex items-center justify-between">
+            <h3 class="font-semibold text-sm">Переслать ({{ forwardModalMessages.length }})</h3>
+            <button @click="forwardModalMessages = null" class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="flex-1 overflow-y-auto thin-scroll p-2 space-y-1">
+            <div v-for="c in orderedChats" :key="c.id" @click="confirmForwardToChat(c.id)"
+                 class="flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer hover:bg-black/[0.04] dark:hover:bg-white/[0.05] transition-colors">
+              <img v-if="c.avatarUrl" :src="c.avatarUrl" class="w-9 h-9 rounded-full object-cover shrink-0">
+              <div v-else class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0">
+                <Globe v-if="c.type === 0 && !c.isContact" class="w-4 h-4" />
+                <span v-else>{{ c.name?.[0]?.toUpperCase() || '?' }}</span>
+              </div>
+              <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
+            </div>
+          </div>
         </div>
       </div>
     </Transition>
