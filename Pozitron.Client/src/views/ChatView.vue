@@ -558,6 +558,17 @@ const currentMessages = computed(() =>
   chat.activeChat ? (chat.messages[chat.activeChat.id] || []) : []
 );
 const isOnline = (userId: string) => chat.onlineUsers.includes(userId);
+const activeChatPeerId = computed(() => {
+  if (!chat.activeChat || chat.activeChat.type === 0) return null;
+  const msgs = chat.messages[chat.activeChat.id] || [];
+  const fromMsg = msgs.find(m => m.userId !== auth.user?.id)?.userId;
+  if (fromMsg) return fromMsg;
+  return chat.allUsers.find(u => u.username === chat.activeChat?.name)?.id || null;
+});
+const isActiveChatOnline = computed(() => {
+  if (!activeChatPeerId.value) return false;
+  return isOnline(activeChatPeerId.value);
+});
 const scrollToBottom = () => nextTick(() => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' }));
 const scrollToBottomSmooth = () => messagesEnd.value?.scrollIntoView({ behavior: 'smooth' });
 const scrollToMessage = (msgId: string) => {
@@ -669,6 +680,34 @@ const saveProfile = async () => {
 };
 const triggerFileInput = () => document.getElementById('avatarInput')?.click();
 const avatarCropModal = ref<{ url: string; zoom: number; offsetX: number; offsetY: number } | null>(null);
+let cropDragging = false;
+let cropStartX = 0;
+let cropStartY = 0;
+let cropBaseX = 0;
+let cropBaseY = 0;
+
+const onCropPointerDown = (e: PointerEvent) => {
+  if (!avatarCropModal.value) return;
+  cropDragging = true;
+  cropStartX = e.clientX;
+  cropStartY = e.clientY;
+  cropBaseX = avatarCropModal.value.offsetX;
+  cropBaseY = avatarCropModal.value.offsetY;
+  (e.currentTarget as HTMLElement)?.setPointerCapture?.(e.pointerId);
+};
+const onCropPointerMove = (e: PointerEvent) => {
+  if (!cropDragging || !avatarCropModal.value) return;
+  const dx = ((e.clientX - cropStartX) / 224) * 100;
+  const dy = ((e.clientY - cropStartY) / 224) * 100;
+  avatarCropModal.value.offsetX = Math.max(-45, Math.min(45, cropBaseX + dx));
+  avatarCropModal.value.offsetY = Math.max(-45, Math.min(45, cropBaseY + dy));
+};
+const onCropPointerUp = () => { cropDragging = false; };
+const onCropWheel = (e: WheelEvent) => {
+  if (!avatarCropModal.value) return;
+  const delta = e.deltaY < 0 ? 0.1 : -0.1;
+  avatarCropModal.value.zoom = Math.max(1, Math.min(3, +(avatarCropModal.value.zoom + delta).toFixed(2)));
+};
 const viewerAvatars = ref<string[]>([]);
 const avatarViewerIndex = ref<number | null>(null);
 const userAvatars = ref<string[]>([]);
@@ -1013,9 +1052,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
             <div class="min-w-0">
               <p class="font-bold text-sm truncate">{{ chat.activeChat.name || 'Чат' }}</p>
-              <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span>в сети</span>
+              <div v-if="chat.activeChat.type === 0 && !chat.activeChat.isContact" class="text-[11px] text-slate-500 dark:text-slate-400">
+                общий канал
+              </div>
+              <div v-else class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span :class="['w-1.5 h-1.5 rounded-full', isActiveChatOnline ? 'bg-emerald-500' : 'bg-slate-400']"></span>
+                <span>{{ isActiveChatOnline ? 'в сети' : 'не в сети' }}</span>
               </div>
             </div>
           </div>
@@ -1174,37 +1216,40 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
       <!-- Кнопка вниз -->
       <Transition name="fade">
-        <button v-if="showScrollButton" @click="scrollToBottomSmooth"
+        <button v-if="showScrollButton && !isSelecting && !chat.replyingTo" @click="scrollToBottomSmooth"
                 class="absolute bottom-24 right-5 z-20 w-10 h-10 rounded-full bg-[#3D7A5E] hover:bg-[#346950] text-white shadow-lg flex items-center justify-center transition-all active:scale-90">
           <ArrowDown class="w-5 h-5" />
         </button>
       </Transition>
 
-      <!-- Панель удаления при выделении -->
+      <!-- Панель выделения в стиле Telegram (заменяет композер) -->
       <Transition name="picker">
-        <div v-if="isSelecting"
-             class="px-4 py-3 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-3 z-20">
-          <button @click="cancelSelection" class="w-9 h-9 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-all active:scale-90">
-            <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg>
-          </button>
-          <span class="flex-1 text-sm font-bold text-slate-700 dark:text-slate-300">
-            {{ selectedMessages.size > 0 ? `Выбрано: ${selectedMessages.size}` : 'Выберите сообщения' }}
-          </span>
-          <button @click="forwardSelected" :disabled="selectedMessages.size === 0"
-                  class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#3D7A5E] hover:bg-[#346950] text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-40">
-            <Forward class="w-4 h-4" />
-            Переслать
-          </button>
-          <button @click="deleteSelected" :disabled="selectedMessages.size === 0"
-                  class="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold transition-all active:scale-95 disabled:opacity-40">
-            <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Удалить
-          </button>
+        <div v-if="isSelecting" class="px-3 pb-3 pt-1 z-20 shrink-0">
+          <div class="max-w-3xl mx-auto surface-composer rounded-2xl px-3 py-2 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <button @click="cancelSelection" class="w-8 h-8 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-500 transition-colors shrink-0">
+                <X class="w-4 h-4" />
+              </button>
+              <span class="text-sm font-semibold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                {{ selectedMessages.size > 0 ? `Выбрано: ${selectedMessages.size}` : 'Выберите' }}
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <button @click="forwardSelected" :disabled="selectedMessages.size === 0" title="Переслать"
+                      class="w-9 h-9 rounded-xl bg-[#3D7A5E]/15 hover:bg-[#3D7A5E]/25 text-[#3D7A5E] flex items-center justify-center transition-colors disabled:opacity-40">
+                <Forward class="w-4 h-4" />
+              </button>
+              <button @click="deleteSelected" :disabled="selectedMessages.size === 0" title="Удалить"
+                      class="w-9 h-9 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-500 flex items-center justify-center transition-colors disabled:opacity-40">
+                <Trash2 class="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       </Transition>
 
       <!-- Остров ввода сообщений -->
-      <footer class="px-3 pb-3 pt-1 z-10 shrink-0 relative">
+      <footer v-if="!isSelecting" class="px-3 pb-3 pt-1 z-10 shrink-0 relative">
         <div class="max-w-3xl mx-auto relative">
           <Transition name="picker">
             <StickerPicker v-if="isStickerPickerOpen" @send-sticker="handleSendSticker" @close="isStickerPickerOpen = false" />
@@ -1749,34 +1794,37 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
       </div>
     </Transition>
 
-    <!-- МОДАЛКА ВЫБОРА МИНИАТЮРЫ АВАТАРА -->
+    <!-- МОДАЛКА ВЫБОРА МИНИАТЮРЫ АВАТАРА (DRAG + ZOOM) -->
     <Transition name="fade">
-      <div v-if="avatarCropModal" class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
-        <div class="surface-sheet rounded-2xl w-full max-w-sm p-5 space-y-4">
+      <div v-if="avatarCropModal" class="fixed inset-0 z-[60] bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="surface-sheet rounded-3xl w-full max-w-sm p-5 space-y-4">
           <div class="flex items-center justify-between">
-            <h3 class="font-semibold text-sm">Выбор миниатюры</h3>
+            <h3 class="font-semibold text-sm">Миниатюра аватара</h3>
             <button @click="avatarCropModal = null" class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400">
               <X class="w-4 h-4" />
             </button>
           </div>
-          <div class="w-56 h-56 mx-auto rounded-2xl overflow-hidden border-2 border-[#3D7A5E] bg-black/20 relative">
+          <div @pointerdown="onCropPointerDown"
+               @pointermove="onCropPointerMove"
+               @pointerup="onCropPointerUp"
+               @pointercancel="onCropPointerUp"
+               @wheel.prevent="onCropWheel"
+               class="w-60 h-60 mx-auto rounded-2xl overflow-hidden bg-black/40 relative cursor-grab active:cursor-grabbing touch-none select-none">
             <img :src="avatarCropModal.url"
-                 class="w-full h-full object-cover select-none pointer-events-none"
+                 class="w-full h-full object-cover pointer-events-none"
                  :style="{ transform: `scale(${avatarCropModal.zoom}) translate(${avatarCropModal.offsetX}%, ${avatarCropModal.offsetY}%)` }">
+            <!-- Круглая рамка-маска как в Telegram -->
+            <div class="absolute inset-0 pointer-events-none rounded-full border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]"></div>
           </div>
-          <div class="space-y-2 text-xs text-slate-500">
-            <label class="flex items-center justify-between gap-3">
-              <span>Масштаб</span>
-              <input v-model.number="avatarCropModal.zoom" type="range" min="1" max="2.5" step="0.05" class="flex-1 accent-[#3D7A5E]">
-            </label>
-            <label class="flex items-center justify-between gap-3">
-              <span>По горизонтали</span>
-              <input v-model.number="avatarCropModal.offsetX" type="range" min="-40" max="40" step="1" class="flex-1 accent-[#3D7A5E]">
-            </label>
-            <label class="flex items-center justify-between gap-3">
-              <span>По вертикали</span>
-              <input v-model.number="avatarCropModal.offsetY" type="range" min="-40" max="40" step="1" class="flex-1 accent-[#3D7A5E]">
-            </label>
+          <div class="flex items-center justify-between px-2">
+            <span class="text-xs text-slate-400">Перетащите фото</span>
+            <div class="flex items-center gap-1.5">
+              <button @click="avatarCropModal.zoom = Math.max(1, +(avatarCropModal.zoom - 0.2).toFixed(2))"
+                      class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">−</button>
+              <span class="text-xs font-mono w-10 text-center">{{ Math.round(avatarCropModal.zoom * 100) }}%</span>
+              <button @click="avatarCropModal.zoom = Math.min(3, +(avatarCropModal.zoom + 0.2).toFixed(2))"
+                      class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">+</button>
+            </div>
           </div>
           <div class="flex gap-2">
             <button @click="avatarCropModal = null" class="flex-1 py-2.5 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] text-xs font-semibold">Отмена</button>
