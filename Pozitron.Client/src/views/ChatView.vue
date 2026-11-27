@@ -794,6 +794,35 @@ const openAvatarViewer = (list: string[], index: number) => {
   avatarViewerIndex.value = index;
 };
 
+const isPeerInContacts = computed(() => {
+  if (!peerProfileModal.value) return false;
+  return chat.contactChats.some(c => c.name?.toLowerCase() === peerProfileModal.value?.username?.toLowerCase());
+});
+
+const peerDmChat = computed(() => {
+  if (!peerProfileModal.value) return null;
+  return chat.chats.find(c => c.type === 1 && c.name?.toLowerCase() === peerProfileModal.value?.username?.toLowerCase()) || null;
+});
+
+const togglePeerContact = async () => {
+  if (!peerProfileModal.value) return;
+  const uid = peerProfileModal.value.userId;
+  if (isPeerInContacts.value) {
+    await api.delete(`/user/contacts/${uid}`);
+    await chat.loadChats();
+  } else {
+    await chat.addContact(uid);
+  }
+};
+
+const openPeerDmFromModal = async () => {
+  if (!peerProfileModal.value) return;
+  const uid = peerProfileModal.value.userId;
+  peerProfileModal.value = null;
+  await chat.openDm(uid);
+  mobileView.value = 'chat';
+};
+
 const openPeerProfileFromChat = async (chatObj: any) => {
   if (!chatObj || chatObj.type === 0) return;
   const msgs = chat.messages[chatObj.id] || [];
@@ -1990,9 +2019,31 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <img v-for="(av, idx) in peerProfileModal.avatars" :key="av" :src="av" @click="openAvatarViewer(peerProfileModal.avatars, idx)"
                    :class="['w-8 h-8 rounded-lg object-cover cursor-pointer border transition-all', idx === 0 ? 'border-[#3D7A5E] ring-1 ring-[#3D7A5E]' : 'border-transparent opacity-70 hover:opacity-100']">
             </div>
-            <div class="text-center">
+            <div class="text-center mb-4">
               <h3 class="text-lg font-bold">{{ peerProfileModal.emojiPrefix }} {{ peerProfileModal.username }}</h3>
-              <p class="text-xs text-slate-400 mt-1">Нажмите на аватар для просмотра</p>
+              <div class="flex items-center justify-center gap-1.5 text-xs text-slate-400 mt-1">
+                <span :class="['w-2 h-2 rounded-full', isOnline(peerProfileModal.userId) ? 'bg-emerald-500' : 'bg-slate-400']"></span>
+                <span>{{ isOnline(peerProfileModal.userId) ? 'в сети' : 'не в сети' }}</span>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <button @click="openPeerDmFromModal"
+                      class="w-full py-2.5 rounded-xl bg-[#3D7A5E] hover:bg-[#346950] text-white text-xs font-semibold flex items-center justify-center gap-2 transition-colors">
+                <MessageSquare class="w-4 h-4" />
+                <span>Открыть чат</span>
+              </button>
+              <button @click="togglePeerContact"
+                      :class="['w-full py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors',
+                        isPeerInContacts ? 'bg-red-500/10 hover:bg-red-500/20 text-red-500' : 'bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.09] text-slate-700 dark:text-slate-200']">
+                <UserPlus class="w-4 h-4" />
+                <span>{{ isPeerInContacts ? 'Удалить из контактов' : 'Добавить в контакты' }}</span>
+              </button>
+              <button v-if="peerDmChat" @click="toggleChatMute(peerDmChat.id)"
+                      class="w-full py-2.5 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.09] text-xs font-semibold flex items-center justify-center gap-2 transition-colors text-slate-700 dark:text-slate-200">
+                <BellOff v-if="isChatMuted(peerDmChat.id)" class="w-4 h-4 text-[#3D7A5E]" />
+                <Bell v-else class="w-4 h-4" />
+                <span>{{ isChatMuted(peerDmChat.id) ? 'Включить уведомления' : 'Отключить уведомления' }}</span>
+              </button>
             </div>
           </div>
         </div>
