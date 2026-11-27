@@ -121,16 +121,22 @@ const forwardedData = computed(() => {
           <Forward class="w-3.5 h-3.5 shrink-0" />
           <span>Переслано от {{ forwardedData.author }}</span>
         </div>
-        <div class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06]">
+        <div class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] flex items-end justify-between gap-2">
           <span>{{ forwardedData.body }}</span>
+          <span v-if="isOwn" class="inline-flex items-center shrink-0 opacity-90" style="color: var(--chat-accent)">
+            <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-current stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-current stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
         </div>
       </template>
-      <span v-else>{{ msg.content }}</span>
-      <!-- Индикатор прочтения для своих сообщений -->
-      <span v-if="isOwn" class="inline-flex items-center ml-2.5 translate-y-0.5 opacity-90" style="color: var(--chat-accent)">
-        <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-current stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-current stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </span>
+      <template v-else>
+        <span>{{ msg.content }}</span>
+        <!-- Индикатор прочтения для своих сообщений -->
+        <span v-if="isOwn" class="inline-flex items-center ml-2.5 translate-y-0.5 opacity-90" style="color: var(--chat-accent)">
+          <svg v-if="!msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-current stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg v-else viewBox="0 0 24 24" class="w-4 h-3.5 fill-none stroke-current stroke-2"><path d="M2 12L7 17L18 6" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 12L13 17L24 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+      </template>
     </div>
 
     <!-- Реакции -->

@@ -500,14 +500,46 @@ const confirmAddContacts = async () => {
 
 type DisplayItem =
   | { kind: 'single'; id: string; msg: any }
-  | { kind: 'album'; id: string; primary: any; items: any[] };
+  | { kind: 'album'; id: string; primary: any; items: any[] }
+  | { kind: 'forwarded'; id: string; primary: any; author: string; items: { msg: any; body: string }[] };
+
+const parseForwarded = (content?: string) => {
+  if (!content) return null;
+  const match = content.match(/^(?:↪\s*)?Переслано от ([^:\n]+):\n([\s\S]*)$/);
+  if (!match) return null;
+  return { author: match[1]!.trim(), body: match[2]!.trim() };
+};
 
 const groupMessagesForDisplay = (msgs: any[]): DisplayItem[] => {
   const result: DisplayItem[] = [];
   for (const msg of msgs) {
     const isMedia = (msg.type === 'Image' || msg.type === 'Video') && msg.attachmentUrl;
+    const fwd = parseForwarded(msg.content);
     const prev = result[result.length - 1];
-    if (isMedia && prev) {
+
+    if (fwd && prev) {
+      const prevMsg = prev.kind === 'single' ? prev.msg : prev.primary;
+      const prevFwd = prev.kind === 'forwarded' ? { author: prev.author } : (prev.kind === 'single' ? parseForwarded(prev.msg.content) : null);
+      const sameSender = prevMsg.userId === msg.userId;
+      const closeInTime = Math.abs(new Date(msg.sentAt).getTime() - new Date(prevMsg.sentAt).getTime()) <= 10000;
+      if (prevFwd && prevFwd.author === fwd.author && sameSender && closeInTime) {
+        if (prev.kind === 'single') {
+          const firstFwd = parseForwarded(prev.msg.content)!;
+          result[result.length - 1] = {
+            kind: 'forwarded',
+            id: `fwd-${prev.msg.id}`,
+            primary: prev.msg,
+            author: fwd.author,
+            items: [{ msg: prev.msg, body: firstFwd.body }, { msg, body: fwd.body }]
+          };
+        } else if (prev.kind === 'forwarded') {
+          prev.items.push({ msg, body: fwd.body });
+        }
+        continue;
+      }
+    }
+
+    if (isMedia && prev && (prev.kind === 'single' || prev.kind === 'album')) {
       const prevMsg = prev.kind === 'single' ? prev.msg : prev.items[prev.items.length - 1];
       const prevIsMedia = (prevMsg.type === 'Image' || prevMsg.type === 'Video') && prevMsg.attachmentUrl;
       const sameUser = prevMsg.userId === msg.userId;
@@ -1153,6 +1185,26 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               </div>
             </div>
 
+            <!-- Группа пересланных сообщений -->
+            <div v-else-if="item.kind === 'forwarded'" :id="`msg-${item.primary.id}`"
+                 :class="['flex gap-2 items-end transition-colors rounded-xl px-1', item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+              <img v-if="item.primary.avatarUrl" :src="item.primary.avatarUrl" @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5 cursor-pointer">
+              <div v-else @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white cursor-pointer">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
+              <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
+                <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
+                <div class="px-3.5 py-2.5 rounded-2xl border border-[#3D7A5E]/30 border-l-[3px] border-l-[#3D7A5E] bg-[var(--own-msg-bg)] space-y-1.5">
+                  <div class="flex items-center gap-1.5 text-[11px] font-semibold text-[#3D7A5E]">
+                    <Forward class="w-3.5 h-3.5 shrink-0" />
+                    <span>Переслано от {{ item.author }}</span>
+                  </div>
+                  <div v-for="sub in item.items" :key="sub.msg.id"
+                       class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] text-sm">
+                    {{ sub.body }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Одиночное сообщение -->
             <div v-else :id="`msg-${item.msg.id}`"
                  :class="['flex gap-2 items-end transition-colors rounded-xl px-1',
@@ -1423,6 +1475,24 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                      :class="['rounded-xl overflow-hidden bg-black/10 cursor-pointer', item.items.length % 2 === 1 && mIdx === 0 ? 'col-span-2 aspect-[16/10]' : 'aspect-square']">
                   <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" class="w-full h-full object-cover" loading="lazy">
                   <video v-else :src="getResolvedUrl(m.attachmentUrl)" controls class="w-full h-full object-cover"></video>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div v-else-if="item.kind === 'forwarded'"
+               :class="['flex gap-2 items-end transition-colors rounded-xl px-1', item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+            <img v-if="item.primary.avatarUrl" :src="item.primary.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
+            <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
+            <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
+              <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
+              <div class="px-3.5 py-2.5 rounded-2xl border border-[#3D7A5E]/30 border-l-[3px] border-l-[#3D7A5E] bg-[var(--own-msg-bg)] space-y-1.5">
+                <div class="flex items-center gap-1.5 text-[11px] font-semibold text-[#3D7A5E]">
+                  <Forward class="w-3.5 h-3.5 shrink-0" />
+                  <span>Переслано от {{ item.author }}</span>
+                </div>
+                <div v-for="sub in item.items" :key="sub.msg.id"
+                     class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] text-sm">
+                  {{ sub.body }}
                 </div>
               </div>
             </div>
