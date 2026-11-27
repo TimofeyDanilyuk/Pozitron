@@ -140,9 +140,25 @@ const closeSplitChat = () => {
 };
 
 const sendSplitMessage = async () => {
-  if (!splitMessageInput.value.trim() || !splitChatId.value) return;
-  await chat.sendMessage(splitMessageInput.value, splitChatId.value);
-  splitMessageInput.value = '';
+  if ((!splitMessageInput.value.trim() && splitPendingFiles.value.length === 0) || !splitChatId.value) return;
+  if (splitPendingFiles.value.length > 0) {
+    uploadingSplitAttachment.value = true;
+    try {
+      for (const item of splitPendingFiles.value) {
+        await chat.uploadAttachment(item.file, splitChatId.value);
+        URL.revokeObjectURL(item.previewUrl);
+      }
+      splitPendingFiles.value = [];
+    } catch {
+      alert('Ошибка при загрузке файла');
+    } finally {
+      uploadingSplitAttachment.value = false;
+    }
+  }
+  if (splitMessageInput.value.trim()) {
+    await chat.sendMessage(splitMessageInput.value, splitChatId.value);
+    splitMessageInput.value = '';
+  }
 };
 
 const handleSplitKeydown = (e: KeyboardEvent) => {
@@ -162,14 +178,10 @@ const handleToggleSplitStickerPicker = async () => {
 };
 
 const triggerSplitAttachmentInput = () => document.getElementById('splitAttachmentInput')?.click();
-const onSplitAttachmentSelected = async (event: Event) => {
+const onSplitAttachmentSelected = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  if (!target.files || !target.files[0] || !splitChatId.value) return;
-  uploadingSplitAttachment.value = true;
-  try {
-    await chat.uploadAttachment(target.files[0], splitChatId.value);
-  } catch { alert('Ошибка при загрузке файла'); }
-  finally { uploadingSplitAttachment.value = false; target.value = ''; }
+  addFilesToQueue(target.files, splitPendingFiles);
+  target.value = '';
 };
 
 const {
@@ -319,18 +331,43 @@ const { isRecording, recordingDuration, toggleRecording, cancelRecording } = use
   finally { uploadingAttachment.value = false; }
 });
 
-// ===== ФАЙЛЫ =====
-const triggerAttachmentInput = () => document.getElementById('attachmentInput')?.click();
-const onAttachmentSelected = async (event: Event) => {
-  const target = event.target as HTMLInputElement;
-  if (!target.files || !target.files[0]) return;
-  uploadingAttachment.value = true;
-  try {
-    await chat.uploadAttachment(target.files[0]);
-    scrollToBottom();
+// ===== ФАЙЛЫ (ДО 10 ШТ. С ПРЕВЬЮ) =====
+interface PendingFile {
+  file: File;
+  previewUrl: string;
+  isVideo: boolean;
+}
+const pendingFiles = ref<PendingFile[]>([]);
+const splitPendingFiles = ref<PendingFile[]>([]);
+
+const addFilesToQueue = (files: FileList | null, queue: typeof pendingFiles) => {
+  if (!files) return;
+  const remaining = 10 - queue.value.length;
+  if (remaining <= 0) {
+    alert('Можно прикрепить максимум 10 файлов');
+    return;
   }
-  catch { alert('Ошибка при загрузке файла'); }
-  finally { uploadingAttachment.value = false; target.value = ''; }
+  const toAdd = Array.from(files).slice(0, remaining);
+  for (const file of toAdd) {
+    queue.value.push({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      isVideo: file.type.startsWith('video/')
+    });
+  }
+};
+
+const removePendingFile = (index: number, queue: PendingFile[]) => {
+  const item = queue[index];
+  if (item) URL.revokeObjectURL(item.previewUrl);
+  queue.splice(index, 1);
+};
+
+const triggerAttachmentInput = () => document.getElementById('attachmentInput')?.click();
+const onAttachmentSelected = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  addFilesToQueue(target.files, pendingFiles);
+  target.value = '';
 };
 
 // ===== КОНТАКТЫ =====
@@ -456,9 +493,25 @@ const openChat = async (c: any) => {
 };
 const goBackToList = () => { mobileView.value = 'list'; };
 const sendMessage = async () => {
-  if (!messageInput.value.trim()) return;
-  await chat.sendMessage(messageInput.value);
-  messageInput.value = '';
+  if (!messageInput.value.trim() && pendingFiles.value.length === 0) return;
+  if (pendingFiles.value.length > 0) {
+    uploadingAttachment.value = true;
+    try {
+      for (const item of pendingFiles.value) {
+        await chat.uploadAttachment(item.file);
+        URL.revokeObjectURL(item.previewUrl);
+      }
+      pendingFiles.value = [];
+    } catch {
+      alert('Ошибка при загрузке файла');
+    } finally {
+      uploadingAttachment.value = false;
+    }
+  }
+  if (messageInput.value.trim()) {
+    await chat.sendMessage(messageInput.value);
+    messageInput.value = '';
+  }
   scrollToBottom();
 };
 const handleKeydown = (e: KeyboardEvent) => {
@@ -764,6 +817,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <FileText class="w-3.5 h-3.5" />
             <span>Файлы</span>
           </button>
+          <button @click="toggleChatMute(chat.activeChat.id)" :title="isChatMuted(chat.activeChat.id) ? 'Включить уведомления' : 'Отключить уведомления'"
+                  :class="['w-8 h-8 rounded-xl flex items-center justify-center transition-colors',
+                    isChatMuted(chat.activeChat.id) ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200']">
+            <BellOff v-if="isChatMuted(chat.activeChat.id)" class="w-4 h-4" />
+            <Bell v-else class="w-4 h-4" />
+          </button>
           <button @click="chat.activeChat = null; mobileView = 'list'" title="Закрыть чат"
             class="w-8 h-8 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
             <X class="w-4 h-4" />
@@ -911,6 +970,22 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             </div>
           </Transition>
 
+          <!-- Превью выбранных файлов (до 10) -->
+          <div v-if="pendingFiles.length > 0" class="mb-2 flex items-center gap-2 overflow-x-auto thin-scroll pb-1">
+            <div v-for="(item, idx) in pendingFiles" :key="item.previewUrl"
+                 class="relative w-16 h-16 rounded-xl overflow-hidden shrink-0 border border-slate-200 dark:border-white/10 bg-black/10">
+              <img v-if="!item.isVideo" :src="item.previewUrl" class="w-full h-full object-cover">
+              <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
+                <Video class="w-6 h-6" />
+              </div>
+              <button @click="removePendingFile(idx, pendingFiles)"
+                      class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-500 transition-colors">
+                <X class="w-3 h-3" />
+              </button>
+            </div>
+            <span class="text-[11px] font-mono text-slate-400 px-1 shrink-0">{{ pendingFiles.length }}/10</span>
+          </div>
+
           <!-- Режим записи голосового -->
           <div v-if="isRecording" class="surface-composer rounded-2xl p-2 flex items-center gap-3">
             <button @click="cancelRecording" title="Отменить запись"
@@ -939,7 +1014,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               </div>
               <Paperclip v-else class="w-5 h-5 text-[#3D7A5E]" />
             </button>
-            <input id="attachmentInput" type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" @change="onAttachmentSelected">
+            <input id="attachmentInput" type="file" multiple class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" @change="onAttachmentSelected">
 
             <button @click.stop="handleToggleStickerPicker" :disabled="!chat.activeChat"
                     :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
@@ -954,22 +1029,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <Smile class="w-5 h-5" />
             </button>
 
-            <button @click="toggleChatMute(chat.activeChat?.id)" :disabled="!chat.activeChat"
-                    :title="isChatMuted(chat.activeChat?.id) ? 'Включить уведомления' : 'Отключить уведомления'"
-                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
-                      isChatMuted(chat.activeChat?.id) ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400',
-                      !chat.activeChat ? 'opacity-40 cursor-not-allowed' : '']">
-              <BellOff v-if="isChatMuted(chat.activeChat?.id)" class="w-5 h-5" />
-              <Bell v-else class="w-5 h-5" />
-            </button>
-
             <textarea v-model="messageInput" @keydown="handleKeydown"
                       :placeholder="chat.activeChat ? 'Сообщение...' : 'Выберите чат...'"
                       :disabled="!chat.activeChat" rows="1"
                       class="flex-1 min-w-0 bg-transparent border-none px-2 py-2 outline-none text-sm leading-tight placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:truncate select-text disabled:opacity-40 resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
                       style="field-sizing: content;"></textarea>
 
-            <button v-if="messageInput.trim()" @click="sendMessage" :disabled="!chat.activeChat"
+            <button v-if="messageInput.trim() || pendingFiles.length > 0" @click="sendMessage" :disabled="!chat.activeChat"
                     class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end">
               <Send class="w-5 h-5" />
             </button>
@@ -1001,6 +1067,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <button @click="openAttachmentsModal(splitChatObj.id, splitChatObj.name || 'Чат', 'files')" title="Файлы"
             class="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-black/[0.04] dark:bg-white/[0.05] hover:bg-black/[0.08] dark:hover:bg-white/[0.09] text-xs text-slate-600 dark:text-slate-300 transition-colors">
             <FileText class="w-3.5 h-3.5" />
+          </button>
+          <button @click="toggleChatMute(splitChatId)" :title="isChatMuted(splitChatId) ? 'Включить уведомления' : 'Отключить уведомления'"
+                  :class="['w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
+                    isChatMuted(splitChatId) ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-slate-100 dark:hover:bg-white/[0.06] text-slate-500 dark:text-slate-400']">
+            <BellOff v-if="isChatMuted(splitChatId)" class="w-4 h-4" />
+            <Bell v-else class="w-4 h-4" />
           </button>
           <button @click="toggleSplitDirection" :title="splitDirection === 'horizontal' ? 'Расположить друг над другом' : 'Расположить рядом'"
             class="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-400 transition-colors">
@@ -1060,6 +1132,22 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <EmojiPicker v-if="isSplitEmojiPickerOpen" class="mb-2" @select="(e) => { splitMessageInput += e; isSplitEmojiPickerOpen = false; }" />
           </Transition>
 
+          <!-- Превью выбранных файлов (до 10) во втором чате -->
+          <div v-if="splitPendingFiles.length > 0" class="mb-2 flex items-center gap-2 overflow-x-auto thin-scroll pb-1">
+            <div v-for="(item, idx) in splitPendingFiles" :key="item.previewUrl"
+                 class="relative w-14 h-14 rounded-xl overflow-hidden shrink-0 border border-slate-200 dark:border-white/10 bg-black/10">
+              <img v-if="!item.isVideo" :src="item.previewUrl" class="w-full h-full object-cover">
+              <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
+                <Video class="w-5 h-5" />
+              </div>
+              <button @click="removePendingFile(idx, splitPendingFiles)"
+                      class="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-500 transition-colors">
+                <X class="w-2.5 h-2.5" />
+              </button>
+            </div>
+            <span class="text-[11px] font-mono text-slate-400 px-1 shrink-0">{{ splitPendingFiles.length }}/10</span>
+          </div>
+
           <!-- Режим записи голосового во втором чате -->
           <div v-if="isSplitRecording" class="surface-composer rounded-2xl p-2 flex items-center gap-3">
             <button @click="cancelSplitRecording" title="Отменить запись"
@@ -1088,7 +1176,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               </div>
               <Paperclip v-else class="w-5 h-5 text-[#3D7A5E]" />
             </button>
-            <input id="splitAttachmentInput" type="file" class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" @change="onSplitAttachmentSelected">
+            <input id="splitAttachmentInput" type="file" multiple class="hidden" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm" @change="onSplitAttachmentSelected">
 
             <button @click.stop="handleToggleSplitStickerPicker"
                     :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
@@ -1102,19 +1190,12 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <Smile class="w-5 h-5" />
             </button>
 
-            <button @click="toggleChatMute(splitChatId)" :title="isChatMuted(splitChatId) ? 'Включить уведомления' : 'Отключить уведомления'"
-                    :class="['p-2 rounded-xl transition-colors shrink-0 self-end mb-0.5',
-                      isChatMuted(splitChatId) ? 'bg-[#3D7A5E]/20 text-[#3D7A5E]' : 'hover:bg-black/5 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400']">
-              <BellOff v-if="isChatMuted(splitChatId)" class="w-5 h-5" />
-              <Bell v-else class="w-5 h-5" />
-            </button>
-
             <textarea v-model="splitMessageInput" @keydown="handleSplitKeydown"
                       placeholder="Написать во второй чат..." rows="1"
-                      class="flex-1 bg-transparent border-none px-2 py-2 outline-none text-sm placeholder:text-slate-400 dark:placeholder:text-slate-500 select-text resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
+                      class="flex-1 min-w-0 bg-transparent border-none px-2 py-2 outline-none text-sm leading-tight placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:truncate select-text resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
                       style="field-sizing: content;"></textarea>
 
-            <button v-if="splitMessageInput.trim()" @click="sendSplitMessage"
+            <button v-if="splitMessageInput.trim() || splitPendingFiles.length > 0" @click="sendSplitMessage"
                     class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end">
               <Send class="w-5 h-5" />
             </button>

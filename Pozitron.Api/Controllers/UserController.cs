@@ -144,7 +144,7 @@ namespace Pozitron.Api.Controllers
                 // Правильный scheme через Railway proxy
                 var scheme = Request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? Request.Scheme;
                 var baseUrl = $"{scheme}://{Request.Host}";
-                var avatarUrl = $"{baseUrl}/uploads/avatars/{fileName}";
+                var avatarUrl = $"/uploads/avatars/{fileName}";
 
                 var userId = Guid.Parse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value!);
                 var user = await _context.Users.FindAsync(userId);

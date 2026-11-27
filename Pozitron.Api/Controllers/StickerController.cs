@@ -160,7 +160,7 @@ public class StickerController : ControllerBase
             await image.SaveAsPngAsync(filePath);
         }
 
-        var url = $"{GetBaseUrl()}/uploads/stickers/{packId}/{fileName}";
+        var url = $"/uploads/stickers/{packId}/{fileName}";
 
         var order = await _context.Stickers.CountAsync(s => s.PackId == packId);
         var sticker = new Sticker
