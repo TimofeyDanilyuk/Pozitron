@@ -41,7 +41,8 @@ import {
   Pin,
   ArrowDown,
   Forward,
-  CornerUpLeft
+  CornerUpLeft,
+  Copy
 } from 'lucide-vue-next';
 
 const auth = useAuthStore();
@@ -376,6 +377,15 @@ const forwardSelected = () => {
   const msgs = currentMessages.value.filter(m => selectedMessages.value.has(m.id));
   if (msgs.length > 0) forwardModalMessages.value = msgs;
 };
+const onCopyFromMenu = async () => {
+  if (!contextMenu.value) return;
+  const text = contextMenu.value.msg.content || '';
+  closeContextMenu();
+  if (text) {
+    try { await navigator.clipboard.writeText(text); } catch { /* ignore */ }
+  }
+};
+
 const confirmForwardToChat = async (targetChatId: string) => {
   if (!forwardModalMessages.value) return;
   const msgs = forwardModalMessages.value;
@@ -384,7 +394,7 @@ const confirmForwardToChat = async (targetChatId: string) => {
   for (const m of msgs) {
     const existingFwd = parseForwarded(m.content);
     if (existingFwd) {
-      await chat.sendMessage(`Переслано от ${existingFwd.author}:\n${existingFwd.body}`, targetChatId);
+      await chat.sendMessage(`Переслано (от ${existingFwd.author}):\n${existingFwd.body}`, targetChatId);
     } else {
       const body = m.content || (m.type === 'Image' ? 'Изображение' : m.type === 'Video' ? 'Видео' : m.type === 'Voice' ? 'Голосовое' : 'Сообщение');
       await chat.sendMessage(`Переслано от ${m.username || 'Пользователь'}:\n${body}`, targetChatId);
@@ -544,9 +554,11 @@ type DisplayItem =
 
 const parseForwarded = (content?: string) => {
   if (!content) return null;
+  const nested = content.match(/^Переслано \(от ([^)\n]+)\):\n([\s\S]*)$/);
+  if (nested) return { author: nested[1]!.trim(), body: nested[2]!.trim(), nested: true };
   const match = content.match(/^(?:↪\s*)?Переслано от ([^:\n]+):\n([\s\S]*)$/);
   if (!match) return null;
-  return { author: match[1]!.trim(), body: match[2]!.trim() };
+  return { author: match[1]!.trim(), body: match[2]!.trim(), nested: false };
 };
 
 const groupMessagesForDisplay = (msgs: any[]): DisplayItem[] => {
@@ -1273,7 +1285,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <div v-else @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white cursor-pointer">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
               <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
                 <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
-                <div class="px-3.5 py-2.5 rounded-2xl border border-[#3D7A5E]/30 border-l-[3px] border-l-[#3D7A5E] bg-[var(--own-msg-bg)] space-y-1.5">
+                <div style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
+                     class="px-3.5 py-2.5 rounded-2xl border border-[#3D7A5E]/30 border-l-[3px] border-l-[#3D7A5E] bg-[var(--own-msg-bg)] space-y-1.5 select-none">
                   <div class="flex items-center gap-1.5 text-[11px] font-semibold text-[#3D7A5E]">
                     <Forward class="w-3.5 h-3.5 shrink-0" />
                     <span>Переслано</span>
@@ -1872,6 +1885,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <button @click="onReactFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
             <svg viewBox="0 0 24 24" class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="10" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1" fill="currentColor" stroke="none"/><path d="M8 14c1 2 7 2 8 0" stroke-linecap="round"/></svg>
             Реакция
+          </button>
+          <button @click="onCopyFromMenu" v-if="contextMenu.msg.content" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
+            <Copy class="w-4 h-4 shrink-0" />
+            Копировать
           </button>
           <button @click="onPinFromMenu" class="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:bg-slate-200 dark:active:bg-slate-700 border-t border-slate-100 dark:border-slate-800">
             <Pin class="w-4 h-4 shrink-0" />
