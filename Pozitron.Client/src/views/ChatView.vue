@@ -1228,7 +1228,18 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
             <!-- Группа пересланных сообщений -->
             <div v-else-if="item.kind === 'forwarded'" :id="`msg-${item.primary.id}`"
-                 :class="['flex gap-2 items-end transition-colors rounded-xl px-1', item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+                 :class="['flex gap-2 items-end transition-colors rounded-xl px-1',
+                   item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '',
+                   isSelecting && item.items.every((s: any) => selectedMessages.has(s.msg.id)) ? 'bg-[#3D7A5E]/15' : '']"
+                 @click="isSelecting ? toggleSelectAlbum(item.items.map((s: any) => s.msg)) : null">
+              <div v-if="isSelecting"
+                   :class="['shrink-0 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
+                     item.items.every((s: any) => selectedMessages.has(s.msg.id)) ? 'bg-[#3D7A5E] border-[#3D7A5E]' : 'border-slate-300 dark:border-slate-600']"
+                   :style="item.primary.userId === auth.user?.id ? 'order: -1' : ''">
+                <svg v-if="item.items.every((s: any) => selectedMessages.has(s.msg.id))" viewBox="0 0 16 16" class="w-3 h-3 fill-white">
+                  <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
+                </svg>
+              </div>
               <img v-if="item.primary.avatarUrl" :src="item.primary.avatarUrl" @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5 cursor-pointer">
               <div v-else @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white cursor-pointer">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
               <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
