@@ -424,7 +424,41 @@ const confirmAddContacts = async () => {
   } finally { addingContacts.value = false; }
 };
 
-// ===== ЭМОДЗИ ПРОФИЛЯ =====
+type DisplayItem =
+  | { kind: 'single'; id: string; msg: any }
+  | { kind: 'album'; id: string; primary: any; items: any[] };
+
+const groupMessagesForDisplay = (msgs: any[]): DisplayItem[] => {
+  const result: DisplayItem[] = [];
+  for (const msg of msgs) {
+    const isMedia = (msg.type === 'Image' || msg.type === 'Video') && msg.attachmentUrl;
+    const prev = result[result.length - 1];
+    if (isMedia && prev) {
+      const prevMsg = prev.kind === 'single' ? prev.msg : prev.items[prev.items.length - 1];
+      const prevIsMedia = (prevMsg.type === 'Image' || prevMsg.type === 'Video') && prevMsg.attachmentUrl;
+      const sameUser = prevMsg.userId === msg.userId;
+      const closeInTime = Math.abs(new Date(msg.sentAt).getTime() - new Date(prevMsg.sentAt).getTime()) <= 10000;
+      if (prevIsMedia && sameUser && closeInTime && (prev.kind === 'single' || prev.items.length < 10)) {
+        if (prev.kind === 'single') {
+          result[result.length - 1] = {
+            kind: 'album',
+            id: `album-${prev.msg.id}`,
+            primary: prev.msg,
+            items: [prev.msg, msg]
+          };
+        } else {
+          prev.items.push(msg);
+        }
+        continue;
+      }
+    }
+    result.push({ kind: 'single', id: msg.id, msg });
+  }
+  return result;
+};
+
+const groupedMainMessages = computed(() => groupMessagesForDisplay(currentMessages.value));
+const groupedSplitMessages = computed(() => groupMessagesForDisplay(splitMessages.value));
 const emojiCategories = [
   { label: '😀 Смайлы', emojis: ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','😶','🙄','😏','😢','😭','😤','😠','😡','🤬','😷','🤒','🥱'] },
   { label: '👋 Жесты', emojis: ['👋','✋','👌','✌️','🤞','👍','👎','✊','👏','🙌','🙏','💪','🦾'] },
@@ -546,11 +580,53 @@ const saveProfile = async () => {
   } finally { isSaving.value = false; }
 };
 const triggerFileInput = () => document.getElementById('avatarInput')?.click();
+const resizeAvatarImage = (file: File): Promise<File> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const max = 512;
+      let { width, height } = img;
+      if (width > max || height > max) {
+        if (width > height) {
+          height = Math.round((height * max) / width);
+          width = max;
+        } else {
+          width = Math.round((width * max) / height);
+          height = max;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { resolve(file); return; }
+      ctx.drawImage(img, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) { resolve(file); return; }
+        resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.85);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(file);
+    };
+    img.src = url;
+  });
+};
+
 const onFileSelected = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files[0]) {
-    try { await auth.uploadAvatar(target.files[0]); }
-    catch { alert('Ошибка при загрузке фото'); }
+    try {
+      const compressed = await resizeAvatarImage(target.files[0]);
+      await auth.uploadAvatar(compressed);
+    } catch (e: any) {
+      alert(e?.response?.data || 'Ошибка при загрузке фото');
+    } finally {
+      target.value = '';
+    }
   }
 };
 const formatTime = (dateStr: string) =>
@@ -571,9 +647,11 @@ const formatDateDivider = (dateStr: string) => {
 };
 const shouldShowDateDivider = (index: number) => {
   if (index === 0) return true;
-  const prevMsg = currentMessages.value[index - 1];
-  const currMsg = currentMessages.value[index];
-  if (!prevMsg || !currMsg) return false;
+  const prevItem = groupedMainMessages.value[index - 1];
+  const currItem = groupedMainMessages.value[index];
+  if (!prevItem || !currItem) return false;
+  const prevMsg = prevItem.kind === 'single' ? prevItem.msg : prevItem.primary;
+  const currMsg = currItem.kind === 'single' ? currItem.msg : currItem.primary;
   return new Date(prevMsg.sentAt).toDateString() !== new Date(currMsg.sentAt).toDateString();
 };
 const currentAvatar = computed(() => auth.user?.avatarUrl || '');
@@ -861,41 +939,58 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <p class="text-sm italic">Сообщений пока нет. Будь первым!</p>
           </div>
 
-          <template v-for="(msg, index) in currentMessages" :key="msg.id">
+          <template v-for="(item, index) in groupedMainMessages" :key="item.id">
             <!-- Разделитель дней -->
             <div v-if="shouldShowDateDivider(index)" class="flex justify-center my-3">
               <span class="px-3 py-1 rounded-full text-[11px] font-medium bg-black/[0.05] dark:bg-white/[0.06] text-slate-500 dark:text-slate-400">
-                {{ formatDateDivider(msg.sentAt) }}
+                {{ formatDateDivider((item.kind === 'single' ? item.msg : item.primary).sentAt) }}
               </span>
             </div>
 
-            <div :id="`msg-${msg.id}`"
+            <!-- Альбом (несколько фото/видео в одном сообщении) -->
+            <div v-if="item.kind === 'album'" :id="`msg-${item.primary.id}`"
+                 :class="['flex gap-2 items-end transition-colors rounded-xl px-1', item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+              <img v-if="item.primary.avatarUrl" :src="item.primary.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
+              <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
+              <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
+                <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
+                <div class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
+                  <div v-for="m in item.items" :key="m.id" class="aspect-square rounded-xl overflow-hidden bg-black/10">
+                    <img v-if="m.type === 'Image'" :src="m.attachmentUrl" class="w-full h-full object-cover" loading="lazy">
+                    <video v-else :src="m.attachmentUrl" controls class="w-full h-full object-cover"></video>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Одиночное сообщение -->
+            <div v-else :id="`msg-${item.msg.id}`"
                  :class="['flex gap-2 items-end transition-colors rounded-xl px-1',
-                   msg.userId === auth.user?.id ? 'flex-row-reverse' : '',
-                   isSelecting && selectedMessages.has(msg.id) ? 'bg-[#3D7A5E]/15' : '']"
-                 @click="isSelecting && msg.userId === auth.user?.id ? toggleSelectMessage(msg.id) : null">
+                   item.msg.userId === auth.user?.id ? 'flex-row-reverse' : '',
+                   isSelecting && selectedMessages.has(item.msg.id) ? 'bg-[#3D7A5E]/15' : '']"
+                 @click="isSelecting && item.msg.userId === auth.user?.id ? toggleSelectMessage(item.msg.id) : null">
 
               <!-- Чекбокс выделения (только свои) -->
-              <div v-if="isSelecting && msg.userId === auth.user?.id"
+              <div v-if="isSelecting && item.msg.userId === auth.user?.id"
                    :class="['shrink-0 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
-                     selectedMessages.has(msg.id) ? 'bg-[#3D7A5E] border-[#3D7A5E]' : 'border-slate-300 dark:border-slate-600']"
-                   :style="msg.userId === auth.user?.id ? 'order: -1' : ''">
-                <svg v-if="selectedMessages.has(msg.id)" viewBox="0 0 16 16" class="w-3 h-3 fill-white">
+                     selectedMessages.has(item.msg.id) ? 'bg-[#3D7A5E] border-[#3D7A5E]' : 'border-slate-300 dark:border-slate-600']"
+                   :style="item.msg.userId === auth.user?.id ? 'order: -1' : ''">
+                <svg v-if="selectedMessages.has(item.msg.id)" viewBox="0 0 16 16" class="w-3 h-3 fill-white">
                   <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
                 </svg>
               </div>
-              <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
-              <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ msg.username?.[0]?.toUpperCase() }}</div>
+              <img v-if="item.msg.avatarUrl" :src="item.msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
+              <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ item.msg.username?.[0]?.toUpperCase() }}</div>
 
-              <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
-                <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ msg.emojiPrefix }} {{ msg.username }} · {{ formatTime(msg.sentAt) }}</span>
-                <div @contextmenu.prevent="showContextMenu($event, msg)"
-                     @touchstart="onMessageLongPress($event, msg)"
+              <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
+                <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.msg.emojiPrefix }} {{ item.msg.username }} · {{ formatTime(item.msg.sentAt) }}</span>
+                <div @contextmenu.prevent="showContextMenu($event, item.msg)"
+                     @touchstart="onMessageLongPress($event, item.msg)"
                      @touchend="onMessageLongPressCancel"
                      @touchmove="onMessageLongPressCancel">
                   <MessageBubble
-                    :msg="msg"
-                    :is-own="msg.userId === auth.user?.id"
+                    :msg="item.msg"
+                    :is-own="item.msg.userId === auth.user?.id"
                     :on-sticker-click="onStickerClick"
                     :on-reply="chat.setReply"
                     :on-react="(id) => { reactionPicker = { x: 0, y: 0, msgId: id }; }"
@@ -1103,24 +1198,39 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         <div v-if="splitMessages.length === 0" class="flex justify-center pt-10 opacity-30">
           <p class="text-sm italic">Сообщений пока нет</p>
         </div>
-        <div v-for="msg in splitMessages" :key="msg.id"
-             :class="['flex gap-2 items-end transition-colors rounded-xl px-1', msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
-          <img v-if="msg.avatarUrl" :src="msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
-          <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ msg.username?.[0]?.toUpperCase() }}</div>
-          <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
-            <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ msg.emojiPrefix }} {{ msg.username }} · {{ formatTime(msg.sentAt) }}</span>
-            <MessageBubble
-              :msg="msg"
-              :is-own="msg.userId === auth.user?.id"
-              :on-sticker-click="onStickerClick"
-              :on-reply="(m: any) => chat.setReply(m)"
-              :on-react="() => {}"
-              :scroll-to-message="() => {}"
-              :add-reaction="(id: string, emoji: string) => chat.addReaction(id, emoji)"
-              :current-user-id="auth.user?.id || ''"
-            />
+        <template v-for="item in groupedSplitMessages" :key="item.id">
+          <div v-if="item.kind === 'album'"
+               :class="['flex gap-2 items-end transition-colors rounded-xl px-1', item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+            <img v-if="item.primary.avatarUrl" :src="item.primary.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
+            <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
+            <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
+              <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
+              <div class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
+                <div v-for="m in item.items" :key="m.id" class="aspect-square rounded-xl overflow-hidden bg-black/10">
+                  <img v-if="m.type === 'Image'" :src="m.attachmentUrl" class="w-full h-full object-cover" loading="lazy">
+                  <video v-else :src="m.attachmentUrl" controls class="w-full h-full object-cover"></video>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+          <div v-else :class="['flex gap-2 items-end transition-colors rounded-xl px-1', item.msg.userId === auth.user?.id ? 'flex-row-reverse' : '']">
+            <img v-if="item.msg.avatarUrl" :src="item.msg.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
+            <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ item.msg.username?.[0]?.toUpperCase() }}</div>
+            <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.msg.userId === auth.user?.id ? 'items-end' : 'items-start']">
+              <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.msg.emojiPrefix }} {{ item.msg.username }} · {{ formatTime(item.msg.sentAt) }}</span>
+              <MessageBubble
+                :msg="item.msg"
+                :is-own="item.msg.userId === auth.user?.id"
+                :on-sticker-click="onStickerClick"
+                :on-reply="(m: any) => chat.setReply(m)"
+                :on-react="() => {}"
+                :scroll-to-message="() => {}"
+                :add-reaction="(id: string, emoji: string) => chat.addReaction(id, emoji)"
+                :current-user-id="auth.user?.id || ''"
+              />
+            </div>
+          </div>
+        </template>
       </div>
       <!-- Полноценный остров ввода второго чата -->
       <footer class="px-3 pb-3 pt-1 z-10 shrink-0 relative">
