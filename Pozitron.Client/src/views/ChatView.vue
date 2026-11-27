@@ -18,6 +18,8 @@ import {
   Sticker,
   Smile,
   ChevronLeft,
+  ChevronRight,
+  Camera,
   Paperclip,
   Send,
   Columns2,
@@ -561,6 +563,7 @@ const startDm = async (userId: string) => {
   await chat.openDm(userId); mobileView.value = 'chat';
 };
 const openProfile = () => {
+  loadUserAvatars();
   newUsername.value = auth.user?.username || '';
   usernameError.value = '';
   userPrefix.value = auth.user?.emojiPrefix || '⚛️';
@@ -580,53 +583,69 @@ const saveProfile = async () => {
   } finally { isSaving.value = false; }
 };
 const triggerFileInput = () => document.getElementById('avatarInput')?.click();
-const resizeAvatarImage = (file: File): Promise<File> => {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const max = 512;
-      let { width, height } = img;
-      if (width > max || height > max) {
-        if (width > height) {
-          height = Math.round((height * max) / width);
-          width = max;
-        } else {
-          width = Math.round((width * max) / height);
-          height = max;
-        }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { resolve(file); return; }
-      ctx.drawImage(img, 0, 0, width, height);
-      canvas.toBlob((blob) => {
-        if (!blob) { resolve(file); return; }
-        resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.85);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve(file);
-    };
-    img.src = url;
-  });
+const avatarCropModal = ref<{ url: string; zoom: number; offsetX: number; offsetY: number } | null>(null);
+const avatarViewerIndex = ref<number | null>(null);
+const userAvatars = ref<string[]>([]);
+
+const loadUserAvatars = () => {
+  if (!auth.user?.id) return;
+  const key = `userAvatars_${auth.user.id}`;
+  const saved: string[] = JSON.parse(localStorage.getItem(key) || '[]');
+  const current = auth.user.avatarUrl;
+  if (current && !saved.includes(current)) saved.unshift(current);
+  userAvatars.value = saved;
+  localStorage.setItem(key, JSON.stringify(saved));
 };
 
-const onFileSelected = async (event: Event) => {
+const addAvatarToHistory = (url?: string) => {
+  if (!url || !auth.user?.id) return;
+  const key = `userAvatars_${auth.user.id}`;
+  const list = [url, ...userAvatars.value.filter(u => u !== url)];
+  userAvatars.value = list;
+  localStorage.setItem(key, JSON.stringify(list));
+};
+
+const onFileSelected = (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files && target.files[0]) {
-    try {
-      const compressed = await resizeAvatarImage(target.files[0]);
-      await auth.uploadAvatar(compressed);
-    } catch (e: any) {
-      alert(e?.response?.data || 'Ошибка при загрузке фото');
-    } finally {
-      target.value = '';
-    }
+    const url = URL.createObjectURL(target.files[0]);
+    avatarCropModal.value = { url, zoom: 1, offsetX: 0, offsetY: 0 };
+    target.value = '';
+  }
+};
+
+const confirmAvatarCrop = async () => {
+  if (!avatarCropModal.value) return;
+  const { url, zoom, offsetX, offsetY } = avatarCropModal.value;
+  try {
+    const file = await new Promise<File>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('No canvas context')); return; }
+        const minSide = Math.min(img.width, img.height);
+        const cropSize = minSide / zoom;
+        const sx = Math.max(0, Math.min(img.width - cropSize, (img.width - cropSize) / 2 - (offsetX * img.width) / 200));
+        const sy = Math.max(0, Math.min(img.height - cropSize, (img.height - cropSize) / 2 - (offsetY * img.height) / 200));
+        ctx.drawImage(img, sx, sy, cropSize, cropSize, 0, 0, size, size);
+        canvas.toBlob((blob) => {
+          if (!blob) { reject(new Error('Blob error')); return; }
+          resolve(new File([blob], 'avatar.jpg', { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.88);
+      };
+      img.onerror = () => reject(new Error('Image load error'));
+      img.src = url;
+    });
+    await auth.uploadAvatar(file);
+    addAvatarToHistory(auth.user?.avatarUrl);
+    URL.revokeObjectURL(url);
+    avatarCropModal.value = null;
+  } catch (e: any) {
+    alert(e?.response?.data || 'Ошибка при загрузке фото');
   }
 };
 const formatTime = (dateStr: string) =>
@@ -1402,15 +1421,23 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         <div class="relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl">
           <div class="h-20 bg-gradient-to-r from-[#3D7A5E] to-[#2c5944]"></div>
           <div class="px-6 pb-8">
-            <div class="relative -mt-10 mb-4 flex justify-center">
-              <div @click="triggerFileInput" class="relative group cursor-pointer">
-                <img v-if="currentAvatar" :src="currentAvatar" class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 object-cover shadow-xl">
-                <div v-else class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-2xl font-bold uppercase">{{ auth.user?.username?.[0] }}</div>
-                <div class="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                  <span class="text-[10px] font-bold uppercase text-white">Изменить</span>
+            <div class="relative -mt-10 mb-3 flex justify-center">
+              <div class="relative">
+                <div @click="userAvatars.length > 0 ? (avatarViewerIndex = 0) : triggerFileInput()" class="cursor-pointer">
+                  <img v-if="currentAvatar" :src="currentAvatar" class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 object-cover shadow-xl">
+                  <div v-else class="w-20 h-20 rounded-2xl border-4 border-white dark:border-slate-900 bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-2xl font-bold uppercase">{{ auth.user?.username?.[0] }}</div>
                 </div>
+                <button @click.stop="triggerFileInput" title="Загрузить новый аватар"
+                        class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[#3D7A5E] text-white flex items-center justify-center shadow-md hover:bg-[#346950] transition-colors">
+                  <Camera class="w-3.5 h-3.5" />
+                </button>
                 <input id="avatarInput" type="file" class="hidden" accept="image/*" @change="onFileSelected">
               </div>
+            </div>
+            <!-- Миниатюры всех загруженных аватаров -->
+            <div v-if="userAvatars.length > 1" class="flex justify-center gap-1.5 mb-3 overflow-x-auto thin-scroll py-1">
+              <img v-for="(av, idx) in userAvatars" :key="av" :src="av" @click="avatarViewerIndex = idx"
+                   :class="['w-8 h-8 rounded-lg object-cover cursor-pointer border transition-all', idx === 0 ? 'border-[#3D7A5E] ring-1 ring-[#3D7A5E]' : 'border-transparent opacity-70 hover:opacity-100']">
             </div>
             <div class="text-center mb-5"><h3 class="text-xl font-black">{{ auth.user?.username }}</h3></div>
             <div class="space-y-4">
@@ -1553,6 +1580,65 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- МОДАЛКА ВЫБОРА МИНИАТЮРЫ АВАТАРА -->
+    <Transition name="fade">
+      <div v-if="avatarCropModal" class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="surface-sheet rounded-2xl w-full max-w-sm p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-semibold text-sm">Выбор миниатюры</h3>
+            <button @click="avatarCropModal = null" class="w-8 h-8 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-slate-400">
+              <X class="w-4 h-4" />
+            </button>
+          </div>
+          <div class="w-56 h-56 mx-auto rounded-2xl overflow-hidden border-2 border-[#3D7A5E] bg-black/20 relative">
+            <img :src="avatarCropModal.url"
+                 class="w-full h-full object-cover select-none pointer-events-none"
+                 :style="{ transform: `scale(${avatarCropModal.zoom}) translate(${avatarCropModal.offsetX}%, ${avatarCropModal.offsetY}%)` }">
+          </div>
+          <div class="space-y-2 text-xs text-slate-500">
+            <label class="flex items-center justify-between gap-3">
+              <span>Масштаб</span>
+              <input v-model.number="avatarCropModal.zoom" type="range" min="1" max="2.5" step="0.05" class="flex-1 accent-[#3D7A5E]">
+            </label>
+            <label class="flex items-center justify-between gap-3">
+              <span>По горизонтали</span>
+              <input v-model.number="avatarCropModal.offsetX" type="range" min="-40" max="40" step="1" class="flex-1 accent-[#3D7A5E]">
+            </label>
+            <label class="flex items-center justify-between gap-3">
+              <span>По вертикали</span>
+              <input v-model.number="avatarCropModal.offsetY" type="range" min="-40" max="40" step="1" class="flex-1 accent-[#3D7A5E]">
+            </label>
+          </div>
+          <div class="flex gap-2">
+            <button @click="avatarCropModal = null" class="flex-1 py-2.5 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] text-xs font-semibold">Отмена</button>
+            <button @click="confirmAvatarCrop" class="flex-1 py-2.5 rounded-xl bg-[#3D7A5E] hover:bg-[#346950] text-white text-xs font-semibold">Сохранить</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ПОЛНОЭКРАННЫЙ ПРОСМОТР АВАТАРОВ -->
+    <Transition name="fade">
+      <div v-if="avatarViewerIndex !== null && userAvatars[avatarViewerIndex]" @click="avatarViewerIndex = null"
+           class="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
+        <button @click.stop="avatarViewerIndex = null" class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+          <X class="w-5 h-5" />
+        </button>
+        <button v-if="userAvatars.length > 1" @click.stop="avatarViewerIndex = (avatarViewerIndex - 1 + userAvatars.length) % userAvatars.length"
+                class="absolute left-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+          <ChevronLeft class="w-6 h-6" />
+        </button>
+        <img :src="userAvatars[avatarViewerIndex]" @click.stop class="max-w-full max-h-[85vh] rounded-2xl object-contain shadow-2xl">
+        <button v-if="userAvatars.length > 1" @click.stop="avatarViewerIndex = (avatarViewerIndex + 1) % userAvatars.length"
+                class="absolute right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20">
+          <ChevronRight class="w-6 h-6" />
+        </button>
+        <div v-if="userAvatars.length > 1" class="absolute bottom-6 px-3 py-1 rounded-full bg-white/10 text-white text-xs font-mono">
+          {{ avatarViewerIndex + 1 }} / {{ userAvatars.length }}
         </div>
       </div>
     </Transition>
