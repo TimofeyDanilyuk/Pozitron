@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
@@ -55,7 +55,7 @@ const { resolveUrl, getResolvedUrl } = useBlobCache();
 const isProfileOpen = ref(false);
 const isSaving = ref(false);
 const messageInput = ref('');
-const userPrefix = ref(auth.user?.emojiPrefix || '??');
+const userPrefix = ref(auth.user?.emojiPrefix || '⚛️');
 const newUsername = ref(auth.user?.username || '');
 const usernameError = ref('');
 const searchQuery = ref('');
@@ -209,7 +209,7 @@ const splitMessages = computed(() => splitChatId.value ? (chat.messages[splitCha
 // ===== КОНТЕКСТНОЕ МЕНЮ =====
 const contextMenu = ref<{ x: number; y: number; msg: any } | null>(null);
 const reactionPicker = ref<{ x: number; y: number; msgId: string } | null>(null);
-const quickReactions = ['??', '??', '??', '??', '??', '??'];
+const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 const pressingMsgId = ref<string | null>(null);
 const swipingMsgId = ref<string | null>(null);
 const swipeOffset = ref(0);
@@ -550,7 +550,7 @@ const parseForwarded = (content?: string) => {
   if (!content) return null;
   const nested = content.match(/^Переслано \(от ([^)\n]+)\):\n([\s\S]*)$/);
   if (nested) return { author: nested[1]!.trim(), body: nested[2]!.trim(), nested: true };
-  const match = content.match(/^Переслано от ([^:\n]+):\n([\s\S]*)$/);
+  const match = content.match(/^(?:↪\s*)?Переслано от ([^:\n]+):\n([\s\S]*)$/);
   if (!match) return null;
   return { author: match[1]!.trim(), body: match[2]!.trim(), nested: false };
 };
@@ -611,15 +611,15 @@ const groupedMainMessages = computed(() =>
 );
 const groupedSplitMessages = computed(() => groupMessagesForDisplay(splitMessages.value));
 const emojiCategories = [
-  { label: '?? Смайлы', emojis: ['??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??'] },
-  { label: '?? Жесты', emojis: ['??','?','??','??','??','??','??','?','??','??','??','??','??'] },
-  { label: '?? Сердца', emojis: ['??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??'] },
-  { label: '?? Символы', emojis: ['?','?','??','??','?','??','??','??','??','??','??','??','??','??','??','??','??'] },
+  { label: '😀 Смайлы', emojis: ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','😶','🙄','😏','😢','😭','😤','😠','😡','🤬','😷','🤒','🥱'] },
+  { label: '👋 Жесты', emojis: ['👋','✋','👌','✌️','🤞','👍','👎','✊','👏','🙌','🙏','💪','🦾'] },
+  { label: '❤️ Сердца', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💕','💞','💓','💗','💖','💘','💝'] },
+  { label: '🌟 Символы', emojis: ['✨','⭐','🌟','💫','⚡','🔥','🌈','☄️','🌊','💥','🎉','🎊','🎁','🏆','🎯','🎲','🎨'] },
 ];
 const filteredProfileEmojis = computed(() => {
   if (!emojiSearch.value.trim()) return emojiCategories;
   const all = emojiCategories.flatMap(c => c.emojis);
-  return [{ label: '?? Результаты', emojis: all }];
+  return [{ label: '🔍 Результаты', emojis: all }];
 });
 
 // ===== СООБЩЕНИЯ =====
@@ -731,7 +731,7 @@ const openProfile = () => {
   loadUserAvatars();
   newUsername.value = auth.user?.username || '';
   usernameError.value = '';
-  userPrefix.value = auth.user?.emojiPrefix || '??';
+  userPrefix.value = auth.user?.emojiPrefix || '⚛️';
   isEmojiPickerOpen.value = false;
   isProfileOpen.value = true;
 };
@@ -1827,7 +1827,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <div>
                 <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase ml-2 mb-1 block">Префикс (эмодзи)</label>
                 <div class="flex gap-2">
-                  <input v-model="userPrefix" type="text" placeholder="??" maxlength="2" class="flex-1 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-center text-2xl outline-none focus:ring-1 focus:ring-blue-500 select-text">
+                  <input v-model="userPrefix" type="text" placeholder="🚀" maxlength="2" class="flex-1 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-center text-2xl outline-none focus:ring-1 focus:ring-blue-500 select-text">
                   <button @click.stop="isEmojiPickerOpen = !isEmojiPickerOpen"
                           :class="['px-4 rounded-xl border flex items-center justify-center transition-all text-slate-500 dark:text-slate-300', isEmojiPickerOpen ? 'bg-blue-600/20 border-blue-500 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700']">
                     <Smile class="w-5 h-5" />
@@ -1995,7 +1995,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <span class="text-xs text-slate-400">Перетащите фото</span>
             <div class="flex items-center gap-1.5">
               <button @click="avatarCropModal.zoom = Math.max(1, +(avatarCropModal.zoom - 0.2).toFixed(2))"
-                      class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">?</button>
+                      class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">−</button>
               <span class="text-xs font-mono w-10 text-center">{{ Math.round(avatarCropModal.zoom * 100) }}%</span>
               <button @click="avatarCropModal.zoom = Math.min(3, +(avatarCropModal.zoom + 0.2).toFixed(2))"
                       class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">+</button>
