@@ -606,6 +606,22 @@ const openAvatarViewer = (list: string[], index: number) => {
   avatarViewerIndex.value = index;
 };
 
+const openPeerProfileFromChat = async (chatObj: any) => {
+  if (!chatObj || chatObj.type === 0) return;
+  const msgs = chat.messages[chatObj.id] || [];
+  let peerId = msgs.find(m => m.userId !== auth.user?.id)?.userId;
+  if (!peerId) {
+    if (chat.allUsers.length === 0) await chat.loadAllUsers();
+    peerId = chat.allUsers.find(u => u.username === chatObj.name)?.id;
+  }
+  if (!peerId) return;
+  await openPeerProfile({
+    userId: peerId,
+    username: chatObj.name || 'Пользователь',
+    avatarUrl: chatObj.avatarUrl
+  });
+};
+
 const openPeerProfile = async (user: { userId: string; username: string; avatarUrl?: string; emojiPrefix?: string }) => {
   if (user.userId === auth.user?.id) {
     openProfile();
@@ -905,8 +921,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           <button @click="goBackToList" class="md:hidden w-9 h-9 flex items-center justify-center rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-all text-[#3D7A5E]">
             <ChevronLeft class="w-6 h-6" />
           </button>
-          <div v-if="chat.activeChat" class="flex items-center gap-2.5 min-w-0">
-            <div class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-sm font-bold shrink-0">
+          <div v-if="chat.activeChat" @click="openPeerProfileFromChat(chat.activeChat)"
+               :class="['flex items-center gap-2.5 min-w-0', chat.activeChat.type === 1 ? 'cursor-pointer hover:opacity-85 transition-opacity' : '']">
+            <img v-if="chat.activeChat.avatarUrl" :src="chat.activeChat.avatarUrl" class="w-9 h-9 rounded-full object-cover shrink-0">
+            <div v-else class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-sm font-bold shrink-0">
               <Globe v-if="chat.activeChat.type === 0 && !chat.activeChat.isContact" class="w-4 h-4" />
               <span v-else>{{ chat.activeChat.name?.[0]?.toUpperCase() || '?' }}</span>
             </div>
@@ -1184,8 +1202,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
     <!-- ВТОРОЙ ЧАТ (SPLIT VIEW) -->
     <section v-if="splitChatObj" class="hidden md:flex flex-1 flex-col surface-sheet rounded-2xl relative overflow-hidden min-w-0 min-h-0">
       <header class="px-4 py-3 border-b border-slate-200/80 dark:border-white/[0.06] flex items-center justify-between shrink-0">
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm shrink-0">
+        <div @click="openPeerProfileFromChat(splitChatObj)"
+             :class="['flex items-center gap-2 min-w-0', splitChatObj.type === 1 ? 'cursor-pointer hover:opacity-85 transition-opacity' : '']">
+          <img v-if="splitChatObj.avatarUrl" :src="splitChatObj.avatarUrl" class="w-8 h-8 rounded-lg object-cover shrink-0">
+          <div v-else class="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-sm shrink-0">
             <Globe v-if="splitChatObj.type === 0" class="w-4 h-4 text-slate-500 dark:text-slate-300" />
             <span v-else>{{ splitChatObj.name?.[0]?.toUpperCase() }}</span>
           </div>
