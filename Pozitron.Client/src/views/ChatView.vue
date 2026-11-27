@@ -149,10 +149,8 @@ const sendSplitMessage = async () => {
   if (filesToSend.length > 0) {
     uploadingSplitAttachment.value = true;
     try {
-      for (const item of filesToSend) {
-        await chat.uploadAttachment(item.file, splitChatId.value);
-        URL.revokeObjectURL(item.previewUrl);
-      }
+      await Promise.all(filesToSend.map(item => chat.uploadAttachment(item.file, splitChatId.value!)));
+      filesToSend.forEach(item => URL.revokeObjectURL(item.previewUrl));
       splitPendingFiles.value = [];
     } catch {
       alert('Ошибка при загрузке файла');
@@ -209,12 +207,18 @@ const splitMessages = computed(() => splitChatId.value ? (chat.messages[splitCha
 const contextMenu = ref<{ x: number; y: number; msg: any } | null>(null);
 const reactionPicker = ref<{ x: number; y: number; msgId: string } | null>(null);
 const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+const pressingMsgId = ref<string | null>(null);
 let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
 const onMessageLongPress = (event: TouchEvent | MouseEvent, msg: any) => {
-  longPressTimer = setTimeout(() => showContextMenu(event, msg), 500);
+  pressingMsgId.value = msg.id;
+  longPressTimer = setTimeout(() => {
+    pressingMsgId.value = null;
+    showContextMenu(event, msg);
+  }, 500);
 };
 const onMessageLongPressCancel = () => {
+  pressingMsgId.value = null;
   if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
 };
 const showContextMenu = (event: TouchEvent | MouseEvent, msg: any) => {
@@ -561,10 +565,8 @@ const sendMessage = async () => {
   if (filesToSend.length > 0) {
     uploadingAttachment.value = true;
     try {
-      for (const item of filesToSend) {
-        await chat.uploadAttachment(item.file);
-        URL.revokeObjectURL(item.previewUrl);
-      }
+      await Promise.all(filesToSend.map(item => chat.uploadAttachment(item.file)));
+      filesToSend.forEach(item => URL.revokeObjectURL(item.previewUrl));
       pendingFiles.value = [];
     } catch {
       alert('Ошибка при загрузке файла');
@@ -1052,10 +1054,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                      @touchend="onMessageLongPressCancel"
                      @touchmove="onMessageLongPressCancel"
                      style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
-                     class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
-                  <div v-for="m in item.items" :key="m.id"
+                     :class="['grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04] transition-transform duration-150', pressingMsgId === item.primary.id ? 'scale-[0.97] opacity-85' : '']">
+                  <div v-for="(m, mIdx) in item.items" :key="m.id"
                        @click="!isSelecting && m.type === 'Image' ? openAvatarViewer(item.items.filter((x: any) => x.type === 'Image').map((x: any) => getResolvedUrl(x.attachmentUrl)), item.items.filter((x: any) => x.type === 'Image').findIndex((x: any) => x.id === m.id)) : null"
-                       class="aspect-square rounded-xl overflow-hidden bg-black/10 cursor-pointer">
+                       :class="['rounded-xl overflow-hidden bg-black/10 cursor-pointer', item.items.length % 2 === 1 && mIdx === 0 ? 'col-span-2 aspect-[16/10]' : 'aspect-square']">
                     <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" draggable="false" class="w-full h-full object-cover" loading="lazy">
                     <video v-else :src="getResolvedUrl(m.attachmentUrl)" controls class="w-full h-full object-cover"></video>
                   </div>
@@ -1088,6 +1090,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                      @touchstart="onMessageLongPress($event, item.msg)"
                      @touchend="onMessageLongPressCancel"
                      @touchmove="onMessageLongPressCancel"
+                     :class="['transition-transform duration-150', pressingMsgId === item.msg.id ? 'scale-[0.97] opacity-85' : '']"
                      style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;">
                   <MessageBubble
                     :msg="item.msg"
@@ -1312,9 +1315,9 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
               <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
               <div class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
-                <div v-for="m in item.items" :key="m.id"
+                <div v-for="(m, mIdx) in item.items" :key="m.id"
                      @click="m.type === 'Image' ? openAvatarViewer(item.items.filter((x: any) => x.type === 'Image').map((x: any) => getResolvedUrl(x.attachmentUrl)), item.items.filter((x: any) => x.type === 'Image').findIndex((x: any) => x.id === m.id)) : null"
-                     class="aspect-square rounded-xl overflow-hidden bg-black/10 cursor-pointer">
+                     :class="['rounded-xl overflow-hidden bg-black/10 cursor-pointer', item.items.length % 2 === 1 && mIdx === 0 ? 'col-span-2 aspect-[16/10]' : 'aspect-square']">
                   <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" class="w-full h-full object-cover" loading="lazy">
                   <video v-else :src="getResolvedUrl(m.attachmentUrl)" controls class="w-full h-full object-cover"></video>
                 </div>
