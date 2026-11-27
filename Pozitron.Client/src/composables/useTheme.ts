@@ -8,9 +8,11 @@ export function useTheme() {
     if (saved === 'light') {
       isDark.value = false;
       document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', 'light');
     } else {
       isDark.value = true;
       document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
     }
   };
 
@@ -18,9 +20,11 @@ export function useTheme() {
     isDark.value = !isDark.value;
     if (isDark.value) {
       document.documentElement.classList.add('dark');
+      document.documentElement.setAttribute('data-theme', 'dark');
       localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', 'light');
       localStorage.setItem('theme', 'light');
     }
   };

@@ -1,15 +1,139 @@
 @import "tailwindcss";
-@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:where(.dark, .dark *, [data-theme="dark"], [data-theme="dark"] *));
+
+:root,
+[data-theme="light"] {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-display: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    
+    /* Акцент из референса «Поездка на Алтай» (глубокий хвойно-зеленый) */
+    --chat-accent: #3D7A5E;
+    --chat-accent-rgb: 61, 122, 94;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* Светлая тема — «Алебастр и Чернила» */
+    --canvas-bg: #F3F1EC;
+    --sheet-bg: #FCFBF9;
+    --sheet-subtle: #F6F4EF;
+    --sheet-hover: #EFECE5;
+    --strip-bg: rgba(252, 251, 249, 0.88);
+    --composer-bg: rgba(255, 255, 255, 0.94);
+    --own-msg-bg: rgba(var(--chat-accent-rgb), 0.08);
+    --moment-bg: rgba(243, 241, 236, 0.55);
+    --border-hairline: rgba(24, 24, 27, 0.085);
+    --border-strong: rgba(24, 24, 27, 0.16);
+    --text-ink: #18181B;
+    --text-secondary: #52525B;
+    --text-muted: #8A8A93;
+    --shadow-sheet: 0 18px 50px -22px rgba(24, 24, 27, 0.13), 0 1px 3px rgba(24, 24, 27, 0.04);
+    --shadow-float: 0 12px 32px -10px rgba(24, 24, 27, 0.16), 0 1px 2px rgba(24, 24, 27, 0.05);
+    --ambient-opacity: 0.14;
+}
+
+.dark,
+[data-theme="dark"] {
+    /* Тёмная тема — «Обсидиан» */
+    --canvas-bg: #0E0F11;
+    --sheet-bg: #16171B;
+    --sheet-subtle: #1C1E23;
+    --sheet-hover: #23262D;
+    --strip-bg: rgba(22, 23, 27, 0.88);
+    --composer-bg: rgba(28, 30, 35, 0.94);
+    --own-msg-bg: rgba(var(--chat-accent-rgb), 0.14);
+    --moment-bg: rgba(255, 255, 255, 0.025);
+    --border-hairline: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.16);
+    --text-ink: #F4F4F5;
+    --text-secondary: #A1A1AA;
+    --text-muted: #71717A;
+    --shadow-sheet: 0 24px 60px -20px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.03);
+    --shadow-float: 0 16px 40px -10px rgba(0, 0, 0, 0.75);
+    --ambient-opacity: 0.18;
+}
+
+* {
+    box-sizing: border-box;
+}
 
 html,
 body,
 #app {
     height: 100%;
+    width: 100%;
     margin: 0;
     padding: 0;
+    overflow: hidden;
 }
 
 body {
-    @apply bg-slate-50 dark:bg-[#0B0F17] text-slate-900 dark:text-slate-100 transition-colors duration-200;
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    background-color: var(--canvas-bg);
+    color: var(--text-ink);
+    font-family: var(--font-sans);
+    transition: background-color 280ms var(--ease-out), color 220ms var(--ease-out);
+}
+
+.surface-sheet {
+    background-color: var(--sheet-bg);
+    border: 1px solid var(--border-hairline);
+    box-shadow: var(--shadow-sheet);
+    transition: background-color 280ms var(--ease-out), border-color 280ms var(--ease-out);
+}
+
+.surface-strip {
+    background-color: var(--strip-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-hairline);
+    box-shadow: var(--shadow-float);
+    transition: background-color 280ms var(--ease-out), border-color 280ms var(--ease-out);
+}
+
+.surface-subtle {
+    background-color: var(--sheet-subtle);
+    border: 1px solid var(--border-hairline);
+}
+
+.surface-composer {
+    background-color: var(--composer-bg);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-float);
+    transition: background-color 280ms var(--ease-out), border-color 280ms var(--ease-out);
+}
+
+.ambient-canvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(60% 45% at 22% 0%, rgba(var(--chat-accent-rgb), var(--ambient-opacity)) 0%, transparent 72%),
+        radial-gradient(45% 40% at 85% 95%, rgba(var(--chat-accent-rgb), calc(var(--ambient-opacity) * 0.6)) 0%, transparent 70%);
+    transition: background 600ms ease;
+}
+
+.border-hairline { border-color: var(--border-hairline); }
+.text-ink { color: var(--text-ink); }
+.text-sec { color: var(--text-secondary); }
+.text-dim { color: var(--text-muted); }
+
+/* Скроллбары */
+.thin-scroll::-webkit-scrollbar { width: 5px; height: 5px; }
+.thin-scroll::-webkit-scrollbar-track { background: transparent; }
+.thin-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Анимация звуковой волны голосового */
+@keyframes recWave {
+    0%, 100% { transform: scaleY(0.25); }
+    50% { transform: scaleY(1); }
+}
+
+.rec-wave-bar {
+    display: inline-block;
+    animation: recWave 0.9s ease-in-out infinite;
+    transform-origin: bottom;
 }
