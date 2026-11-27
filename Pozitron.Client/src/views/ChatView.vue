@@ -250,6 +250,15 @@ const toggleSelectMessage = (msgId: string) => {
   selectedMessages.value = new Set(selectedMessages.value);
 };
 
+const toggleSelectAlbum = (items: any[]) => {
+  const allSelected = items.every(m => selectedMessages.value.has(m.id));
+  for (const m of items) {
+    if (allSelected) selectedMessages.value.delete(m.id);
+    else selectedMessages.value.add(m.id);
+  }
+  selectedMessages.value = new Set(selectedMessages.value);
+};
+
 const cancelSelection = () => {
   selectedMessages.value = new Set();
   isSelecting.value = false;
@@ -1004,14 +1013,30 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
 
             <!-- Альбом (несколько фото/видео в одном сообщении) -->
             <div v-if="item.kind === 'album'" :id="`msg-${item.primary.id}`"
-                 :class="['flex gap-2 items-end transition-colors rounded-xl px-1', item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '']">
-              <img v-if="item.primary.avatarUrl" :src="item.primary.avatarUrl" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5">
-              <div v-else class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
+                 :class="['flex gap-2 items-end transition-colors rounded-xl px-1 select-none',
+                   item.primary.userId === auth.user?.id ? 'flex-row-reverse' : '',
+                   isSelecting && item.items.every((m: any) => selectedMessages.has(m.id)) ? 'bg-[#3D7A5E]/15' : '']"
+                 @click="isSelecting && item.primary.userId === auth.user?.id ? toggleSelectAlbum(item.items) : null">
+              <div v-if="isSelecting && item.primary.userId === auth.user?.id"
+                   :class="['shrink-0 self-center w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all cursor-pointer',
+                     item.items.every((m: any) => selectedMessages.has(m.id)) ? 'bg-[#3D7A5E] border-[#3D7A5E]' : 'border-slate-300 dark:border-slate-600']"
+                   style="order: -1">
+                <svg v-if="item.items.every((m: any) => selectedMessages.has(m.id))" viewBox="0 0 16 16" class="w-3 h-3 fill-white">
+                  <path d="M13.5 3.5L6 11L2.5 7.5L1.5 8.5L6 13L14.5 4.5L13.5 3.5Z"/>
+                </svg>
+              </div>
+              <img v-if="item.primary.avatarUrl" :src="item.primary.avatarUrl" @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg object-cover shrink-0 mb-5 cursor-pointer">
+              <div v-else @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white cursor-pointer">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
               <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
                 <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
-                <div class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
+                <div @contextmenu.prevent="showContextMenu($event, item.primary)"
+                     @touchstart="onMessageLongPress($event, item.primary)"
+                     @touchend="onMessageLongPressCancel"
+                     @touchmove="onMessageLongPressCancel"
+                     style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
+                     class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
                   <div v-for="m in item.items" :key="m.id" class="aspect-square rounded-xl overflow-hidden bg-black/10">
-                    <img v-if="m.type === 'Image'" :src="m.attachmentUrl" class="w-full h-full object-cover" loading="lazy">
+                    <img v-if="m.type === 'Image'" :src="m.attachmentUrl" draggable="false" class="w-full h-full object-cover pointer-events-none" loading="lazy">
                     <video v-else :src="m.attachmentUrl" controls class="w-full h-full object-cover"></video>
                   </div>
                 </div>
@@ -1042,7 +1067,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                 <div @contextmenu.prevent="showContextMenu($event, item.msg)"
                      @touchstart="onMessageLongPress($event, item.msg)"
                      @touchend="onMessageLongPressCancel"
-                     @touchmove="onMessageLongPressCancel">
+                     @touchmove="onMessageLongPressCancel"
+                     style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;">
                   <MessageBubble
                     :msg="item.msg"
                     :is-own="item.msg.userId === auth.user?.id"
