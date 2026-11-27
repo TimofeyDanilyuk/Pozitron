@@ -312,23 +312,50 @@ const cancelSelection = () => {
   isSelecting.value = false;
 };
 
-const deleteSelected = async () => {
-  if (selectedMessages.value.size === 0) return;
-  await chat.deleteMessages([...selectedMessages.value]);
-  cancelSelection();
+const canDeleteSelected = computed(() => {
+  if (selectedMessages.value.size === 0) return false;
+  return currentMessages.value
+    .filter(m => selectedMessages.value.has(m.id))
+    .every(m => m.userId === auth.user?.id);
+});
+
+const deleteConfirmModal = ref<string[] | null>(null);
+const hiddenMessageIds = ref<Set<string>>(new Set(JSON.parse(localStorage.getItem('hiddenMessageIds') || '[]')));
+
+const deleteSelected = () => {
+  if (selectedMessages.value.size === 0 || !canDeleteSelected.value) return;
+  deleteConfirmModal.value = [...selectedMessages.value];
 };
 
 const onDeleteFromMenu = () => {
   if (!contextMenu.value) return;
   const msgId = contextMenu.value.msg.id;
   closeContextMenu();
-  // Если уже выделяем — добавляем в выделение, иначе сразу удаляем
   if (isSelecting.value) {
     selectedMessages.value.add(msgId);
     selectedMessages.value = new Set(selectedMessages.value);
   } else {
-    chat.deleteMessages([msgId]);
+    deleteConfirmModal.value = [msgId];
   }
+};
+
+const confirmDeleteForAll = async () => {
+  if (!deleteConfirmModal.value) return;
+  const ids = deleteConfirmModal.value;
+  deleteConfirmModal.value = null;
+  await chat.deleteMessages(ids);
+  cancelSelection();
+};
+
+const confirmDeleteForMe = () => {
+  if (!deleteConfirmModal.value) return;
+  for (const id of deleteConfirmModal.value) {
+    hiddenMessageIds.value.add(id);
+  }
+  hiddenMessageIds.value = new Set(hiddenMessageIds.value);
+  localStorage.setItem('hiddenMessageIds', JSON.stringify([...hiddenMessageIds.value]));
+  deleteConfirmModal.value = null;
+  cancelSelection();
 };
 
 const onSelectFromMenu = () => {
@@ -355,9 +382,21 @@ const confirmForwardToChat = async (targetChatId: string) => {
   forwardModalMessages.value = null;
   cancelSelection();
   for (const m of msgs) {
-    const body = m.content || (m.type === 'Image' ? 'Изображение' : m.type === 'Video' ? 'Видео' : m.type === 'Voice' ? 'Голосовое' : 'Сообщение');
-    await chat.sendMessage(`Переслано от ${m.username || 'Пользователь'}:\n${body}`, targetChatId);
+    const existingFwd = parseForwarded(m.content);
+    if (existingFwd) {
+      await chat.sendMessage(`Переслано от ${existingFwd.author}:\n${existingFwd.body}`, targetChatId);
+    } else {
+      const body = m.content || (m.type === 'Image' ? 'Изображение' : m.type === 'Video' ? 'Видео' : m.type === 'Voice' ? 'Голосовое' : 'Сообщение');
+      await chat.sendMessage(`Переслано от ${m.username || 'Пользователь'}:\n${body}`, targetChatId);
+    }
   }
+};
+
+const expandedForwarded = ref<Set<string>>(new Set());
+const toggleForwardedExpand = (id: string) => {
+  if (expandedForwarded.value.has(id)) expandedForwarded.value.delete(id);
+  else expandedForwarded.value.add(id);
+  expandedForwarded.value = new Set(expandedForwarded.value);
 };
 
 const onPinFromMenu = async () => {
@@ -563,7 +602,9 @@ const groupMessagesForDisplay = (msgs: any[]): DisplayItem[] => {
   return result;
 };
 
-const groupedMainMessages = computed(() => groupMessagesForDisplay(currentMessages.value));
+const groupedMainMessages = computed(() =>
+  groupMessagesForDisplay(currentMessages.value.filter(m => !hiddenMessageIds.value.has(m.id)))
+);
 const groupedSplitMessages = computed(() => groupMessagesForDisplay(splitMessages.value));
 const emojiCategories = [
   { label: '😀 Смайлы', emojis: ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','😶','🙄','😏','😢','😭','😤','😠','😡','🤬','😷','🤒','🥱'] },
@@ -1197,7 +1238,11 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                     <Forward class="w-3.5 h-3.5 shrink-0" />
                     <span>Переслано</span>
                   </div>
-                  <div v-for="sub in item.items" :key="sub.msg.id"
+                  <div v-for="sub in (expandedForwarded.has(item.id) ? item.items : item.items.slice(0, 3))" :key="sub.msg.id"
+                       @contextmenu.prevent="showContextMenu($event, sub.msg)"
+                       @touchstart="onMessageLongPress($event, sub.msg)"
+                       @touchend="onMessageLongPressCancel"
+                       @touchmove="onMessageTouchMove($event, sub.msg)"
                        class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] text-sm">
                     <div class="flex items-center gap-1.5 mb-0.5">
                       <span class="w-4 h-4 rounded-full bg-[#3D7A5E]/20 text-[#3D7A5E] text-[9px] font-bold flex items-center justify-center shrink-0">
@@ -1206,7 +1251,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                       <span class="text-[11px] font-semibold text-[#3D7A5E] truncate">{{ sub.author }}</span>
                     </div>
                     <div class="flex items-end justify-between gap-2">
-                      <span>{{ sub.body }}</span>
+                      <span>{{ !expandedForwarded.has(item.id) && sub.body.length > 220 ? sub.body.slice(0, 220) + '...' : sub.body }}</span>
                       <span v-if="item.primary.userId === auth.user?.id && sub === item.items[item.items.length - 1]"
                             class="inline-flex items-center shrink-0 opacity-90 text-[#3D7A5E]">
                         <svg v-if="!sub.msg.isRead" viewBox="0 0 24 24" class="w-3.5 h-3.5 fill-none stroke-current stroke-2"><path d="M4 12L9 17L20 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -1214,6 +1259,11 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                       </span>
                     </div>
                   </div>
+                  <button v-if="item.items.length > 3 || item.items.some(s => s.body.length > 220)"
+                          @click.stop="toggleForwardedExpand(item.id)"
+                          class="text-[11px] font-semibold text-[#3D7A5E] hover:underline pt-0.5">
+                    {{ expandedForwarded.has(item.id) ? 'Свернуть' : `Показать полностью (${item.items.length})` }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1296,8 +1346,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                       class="w-9 h-9 rounded-xl bg-[#3D7A5E]/15 hover:bg-[#3D7A5E]/25 text-[#3D7A5E] flex items-center justify-center transition-colors disabled:opacity-40">
                 <Forward class="w-4 h-4" />
               </button>
-              <button @click="deleteSelected" :disabled="selectedMessages.size === 0" title="Удалить"
-                      class="w-9 h-9 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-500 flex items-center justify-center transition-colors disabled:opacity-40">
+              <button v-if="canDeleteSelected" @click="deleteSelected" title="Удалить"
+                      class="w-9 h-9 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-500 flex items-center justify-center transition-colors">
                 <Trash2 class="w-4 h-4" />
               </button>
             </div>
@@ -1980,6 +2030,26 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               </div>
               <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
             </div>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- МОДАЛКА ПОДТВЕРЖДЕНИЯ УДАЛЕНИЯ -->
+    <Transition name="fade">
+      <div v-if="deleteConfirmModal" @click="deleteConfirmModal = null" class="fixed inset-0 z-[70] bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div @click.stop class="surface-sheet rounded-2xl w-full max-w-xs p-5 space-y-3">
+          <h3 class="font-semibold text-sm">Удалить {{ deleteConfirmModal.length > 1 ? `сообщения (${deleteConfirmModal.length})` : 'сообщение' }}?</h3>
+          <div class="flex flex-col gap-2 pt-1">
+            <button @click="confirmDeleteForAll" class="w-full py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-xs font-semibold transition-colors">
+              Удалить у всех
+            </button>
+            <button @click="confirmDeleteForMe" class="w-full py-2.5 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] text-xs font-semibold transition-colors">
+              Удалить у меня
+            </button>
+            <button @click="deleteConfirmModal = null" class="w-full py-2 rounded-xl text-xs text-slate-400 hover:text-slate-600">
+              Отмена
+            </button>
           </div>
         </div>
       </div>
