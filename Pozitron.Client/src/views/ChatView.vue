@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useAuthStore } from '../store/auth';
 import { useChatStore } from '../store/chat';
@@ -55,7 +55,7 @@ const { resolveUrl, getResolvedUrl } = useBlobCache();
 const isProfileOpen = ref(false);
 const isSaving = ref(false);
 const messageInput = ref('');
-const userPrefix = ref(auth.user?.emojiPrefix || '⚛️');
+const userPrefix = ref(auth.user?.emojiPrefix || '??');
 const newUsername = ref(auth.user?.username || '');
 const usernameError = ref('');
 const searchQuery = ref('');
@@ -209,7 +209,7 @@ const splitMessages = computed(() => splitChatId.value ? (chat.messages[splitCha
 // ===== КОНТЕКСТНОЕ МЕНЮ =====
 const contextMenu = ref<{ x: number; y: number; msg: any } | null>(null);
 const reactionPicker = ref<{ x: number; y: number; msgId: string } | null>(null);
-const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+const quickReactions = ['??', '??', '??', '??', '??', '??'];
 const pressingMsgId = ref<string | null>(null);
 const swipingMsgId = ref<string | null>(null);
 const swipeOffset = ref(0);
@@ -527,12 +527,6 @@ const parseLastMessage = (text?: string) => {
   if (clean === 'Стикер') return { icon: 'sticker' as const, label: clean };
   return { icon: null, label: text };
 };
-const openAddContacts = async () => {
-  isAddContactsOpen.value = true;
-  selectedUserIds.value = new Set();
-  contactSearch.value = '';
-  await chat.loadAllUsers();
-};
 const toggleSelectUser = (userId: string) => {
   if (selectedUserIds.value.has(userId)) selectedUserIds.value.delete(userId);
   else selectedUserIds.value.add(userId);
@@ -550,13 +544,13 @@ const confirmAddContacts = async () => {
 type DisplayItem =
   | { kind: 'single'; id: string; msg: any }
   | { kind: 'album'; id: string; primary: any; items: any[] }
-  | { kind: 'forwarded'; id: string; primary: any; author: string; items: { msg: any; author: string; body: string }[] };
+  | { kind: 'forwarded'; id: string; primary: any; author: string; items: { msg: any; author: string; body: string; nested: boolean }[] };
 
 const parseForwarded = (content?: string) => {
   if (!content) return null;
   const nested = content.match(/^Переслано \(от ([^)\n]+)\):\n([\s\S]*)$/);
   if (nested) return { author: nested[1]!.trim(), body: nested[2]!.trim(), nested: true };
-  const match = content.match(/^(?:↪\s*)?Переслано от ([^:\n]+):\n([\s\S]*)$/);
+  const match = content.match(/^Переслано от ([^:\n]+):\n([\s\S]*)$/);
   if (!match) return null;
   return { author: match[1]!.trim(), body: match[2]!.trim(), nested: false };
 };
@@ -568,26 +562,24 @@ const groupMessagesForDisplay = (msgs: any[]): DisplayItem[] => {
     const fwd = parseForwarded(msg.content);
     const prev = result[result.length - 1];
 
-    if (fwd && prev) {
-      const prevMsg = prev.kind === 'single' ? prev.msg : prev.primary;
-      const prevFwd = prev.kind === 'forwarded' ? { author: prev.author } : (prev.kind === 'single' ? parseForwarded(prev.msg.content) : null);
-      const sameSender = prevMsg.userId === msg.userId;
-      const closeInTime = Math.abs(new Date(msg.sentAt).getTime() - new Date(prevMsg.sentAt).getTime()) <= 10000;
-      if (prevFwd && sameSender && closeInTime) {
-        if (prev.kind === 'single') {
-          const firstFwd = parseForwarded(prev.msg.content)!;
-          result[result.length - 1] = {
-            kind: 'forwarded',
-            id: `fwd-${prev.msg.id}`,
-            primary: prev.msg,
-            author: fwd.author,
-            items: [{ msg: prev.msg, author: firstFwd.author, body: firstFwd.body }, { msg, author: fwd.author, body: fwd.body }]
-          };
-        } else if (prev.kind === 'forwarded') {
-          prev.items.push({ msg, author: fwd.author, body: fwd.body });
+    if (fwd) {
+      if (prev && prev.kind === 'forwarded') {
+        const prevMsg = prev.primary;
+        const sameSender = prevMsg.userId === msg.userId;
+        const closeInTime = Math.abs(new Date(msg.sentAt).getTime() - new Date(prevMsg.sentAt).getTime()) <= 10000;
+        if (sameSender && closeInTime) {
+          prev.items.push({ msg, author: fwd.author, body: fwd.body, nested: fwd.nested });
+          continue;
         }
-        continue;
       }
+      result.push({
+        kind: 'forwarded',
+        id: `fwd-${msg.id}`,
+        primary: msg,
+        author: fwd.author,
+        items: [{ msg, author: fwd.author, body: fwd.body, nested: fwd.nested }]
+      });
+      continue;
     }
 
     if (isMedia && prev && (prev.kind === 'single' || prev.kind === 'album')) {
@@ -619,15 +611,15 @@ const groupedMainMessages = computed(() =>
 );
 const groupedSplitMessages = computed(() => groupMessagesForDisplay(splitMessages.value));
 const emojiCategories = [
-  { label: '😀 Смайлы', emojis: ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','🥰','😘','🙂','🤗','🤩','🤔','😐','😶','🙄','😏','😢','😭','😤','😠','😡','🤬','😷','🤒','🥱'] },
-  { label: '👋 Жесты', emojis: ['👋','✋','👌','✌️','🤞','👍','👎','✊','👏','🙌','🙏','💪','🦾'] },
-  { label: '❤️ Сердца', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','💔','💕','💞','💓','💗','💖','💘','💝'] },
-  { label: '🌟 Символы', emojis: ['✨','⭐','🌟','💫','⚡','🔥','🌈','☄️','🌊','💥','🎉','🎊','🎁','🏆','🎯','🎲','🎨'] },
+  { label: '?? Смайлы', emojis: ['??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??'] },
+  { label: '?? Жесты', emojis: ['??','?','??','??','??','??','??','?','??','??','??','??','??'] },
+  { label: '?? Сердца', emojis: ['??','??','??','??','??','??','??','??','??','??','??','??','??','??','??','??'] },
+  { label: '?? Символы', emojis: ['?','?','??','??','?','??','??','??','??','??','??','??','??','??','??','??','??'] },
 ];
 const filteredProfileEmojis = computed(() => {
   if (!emojiSearch.value.trim()) return emojiCategories;
   const all = emojiCategories.flatMap(c => c.emojis);
-  return [{ label: '🔍 Результаты', emojis: all }];
+  return [{ label: '?? Результаты', emojis: all }];
 });
 
 // ===== СООБЩЕНИЯ =====
@@ -739,7 +731,7 @@ const openProfile = () => {
   loadUserAvatars();
   newUsername.value = auth.user?.username || '';
   usernameError.value = '';
-  userPrefix.value = auth.user?.emojiPrefix || '⚛️';
+  userPrefix.value = auth.user?.emojiPrefix || '??';
   isEmojiPickerOpen.value = false;
   isProfileOpen.value = true;
 };
@@ -1070,10 +1062,6 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
         <div class="p-4 border-b border-slate-200 dark:border-white/[0.08] flex items-center justify-between">
           <h3 class="font-semibold text-sm">Все диалоги</h3>
           <div class="flex items-center gap-2">
-            <button @click="openAddContacts(); isAllChatsOpen = false" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-[#3D7A5E]/15 text-[#3D7A5E] text-xs font-medium hover:bg-[#3D7A5E]/25 transition-colors">
-              <UserPlus class="w-3.5 h-3.5" />
-              <span>Контакты</span>
-            </button>
             <button @click="handleLogout" title="Выйти" class="w-8 h-8 rounded-lg hover:bg-red-500/10 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors">
               <LogOut class="w-4 h-4" />
             </button>
@@ -1094,15 +1082,18 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
           </div>
         </div>
         <div class="flex-1 overflow-y-auto thin-scroll p-2 space-y-1">
-          <div v-if="chat.contactChats.length > 0" class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Личные</div>
-          <div v-for="c in chat.contactChats" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
+          <div v-if="orderedChats.some(c => c.type === 1)" class="px-3 pt-1 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Личные</div>
+          <div v-for="c in orderedChats.filter(c => c.type === 1)" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
                :class="['flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors', chat.activeChat?.id === c.id ? 'bg-[#3D7A5E]/15 text-[#3D7A5E]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]']">
             <img v-if="c.avatarUrl" :src="c.avatarUrl" class="w-9 h-9 rounded-full object-cover shrink-0">
             <div v-else class="w-9 h-9 rounded-full bg-[#3D7A5E]/15 text-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0">
               <span>{{ c.name?.[0]?.toUpperCase() || '?' }}</span>
             </div>
             <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
+              <div class="flex items-center gap-1">
+                <p class="text-sm font-medium truncate">{{ c.name || 'Чат' }}</p>
+                <span v-if="c.isContact" class="text-[10px] px-1.5 py-0.5 rounded bg-[#3D7A5E]/15 text-[#3D7A5E] font-medium shrink-0">контакт</span>
+              </div>
               <p class="text-xs text-slate-400 truncate flex items-center gap-1">
                 <ImageIcon v-if="parseLastMessage(c.lastMessage).icon === 'image'" class="w-3 h-3 shrink-0" />
                 <Video v-else-if="parseLastMessage(c.lastMessage).icon === 'video'" class="w-3 h-3 shrink-0" />
@@ -1116,8 +1107,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <Columns2 class="w-4 h-4" />
             </button>
           </div>
-          <div v-if="chat.otherChats.length > 0" class="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Групповые</div>
-          <div v-for="c in chat.otherChats" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
+          <div v-if="orderedChats.some(c => c.type === 0)" class="px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Групповые</div>
+          <div v-for="c in orderedChats.filter(c => c.type === 0)" :key="c.id" @click="openChat(c); isAllChatsOpen = false"
                :class="['flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors', chat.activeChat?.id === c.id ? 'bg-[#3D7A5E]/15 text-[#3D7A5E]' : 'hover:bg-black/[0.03] dark:hover:bg-white/[0.04]']">
             <img v-if="c.avatarUrl" :src="c.avatarUrl" class="w-9 h-9 rounded-full object-cover shrink-0">
             <div v-else class="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/10 flex items-center justify-center text-xs font-bold shrink-0">
@@ -1285,23 +1276,25 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <div v-else @click.stop="openPeerProfile(item.primary)" class="w-7 h-7 rounded-lg bg-[#3D7A5E] flex items-center justify-center text-xs font-bold shrink-0 mb-5 text-white cursor-pointer">{{ item.primary.username?.[0]?.toUpperCase() }}</div>
               <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
                 <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
-                <div style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
-                     class="px-3.5 py-2.5 rounded-2xl border border-[#3D7A5E]/30 border-l-[3px] border-l-[#3D7A5E] bg-[var(--own-msg-bg)] space-y-1.5 select-none">
+                <div @contextmenu.prevent="showContextMenu($event, item.primary)"
+                     @touchstart="onMessageLongPress($event, item.primary)"
+                     @touchend="onMessageLongPressCancel"
+                     @touchmove="onMessageTouchMove($event, item.primary)"
+                     style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
+                     :class="['px-3.5 py-2.5 rounded-2xl border border-[#3D7A5E]/30 border-l-[3px] border-l-[#3D7A5E] bg-[var(--own-msg-bg)] space-y-1.5 select-none transition-transform duration-150', pressingMsgId === item.primary.id ? 'scale-[0.97] opacity-85' : '']">
                   <div class="flex items-center gap-1.5 text-[11px] font-semibold text-[#3D7A5E]">
                     <Forward class="w-3.5 h-3.5 shrink-0" />
                     <span>Переслано</span>
                   </div>
                   <div v-for="sub in (expandedForwarded.has(item.id) ? item.items : item.items.slice(0, 3))" :key="sub.msg.id"
-                       @contextmenu.prevent="showContextMenu($event, sub.msg)"
-                       @touchstart="onMessageLongPress($event, sub.msg)"
-                       @touchend="onMessageLongPressCancel"
-                       @touchmove="onMessageTouchMove($event, sub.msg)"
-                       class="px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] text-sm">
+                       :class="['px-2.5 py-1.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-black/[0.05] dark:border-white/[0.06] text-sm', sub.nested ? 'border-l-2 border-l-[#3D7A5E]' : '']">
                     <div class="flex items-center gap-1.5 mb-0.5">
                       <span class="w-4 h-4 rounded-full bg-[#3D7A5E]/20 text-[#3D7A5E] text-[9px] font-bold flex items-center justify-center shrink-0">
                         {{ sub.author[0]?.toUpperCase() }}
                       </span>
-                      <span class="text-[11px] font-semibold text-[#3D7A5E] truncate">{{ sub.author }}</span>
+                      <span class="text-[11px] font-semibold text-[#3D7A5E] truncate">
+                        {{ sub.nested ? `Переслано от ${sub.author}` : sub.author }}
+                      </span>
                     </div>
                     <div class="flex items-end justify-between gap-2">
                       <span>{{ !expandedForwarded.has(item.id) && sub.body.length > 220 ? sub.body.slice(0, 220) + '...' : sub.body }}</span>
@@ -1834,7 +1827,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <div>
                 <label class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase ml-2 mb-1 block">Префикс (эмодзи)</label>
                 <div class="flex gap-2">
-                  <input v-model="userPrefix" type="text" placeholder="🚀" maxlength="2" class="flex-1 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-center text-2xl outline-none focus:ring-1 focus:ring-blue-500 select-text">
+                  <input v-model="userPrefix" type="text" placeholder="??" maxlength="2" class="flex-1 bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-center text-2xl outline-none focus:ring-1 focus:ring-blue-500 select-text">
                   <button @click.stop="isEmojiPickerOpen = !isEmojiPickerOpen"
                           :class="['px-4 rounded-xl border flex items-center justify-center transition-all text-slate-500 dark:text-slate-300', isEmojiPickerOpen ? 'bg-blue-600/20 border-blue-500 text-blue-600 dark:text-blue-400' : 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700']">
                     <Smile class="w-5 h-5" />
@@ -2002,7 +1995,7 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <span class="text-xs text-slate-400">Перетащите фото</span>
             <div class="flex items-center gap-1.5">
               <button @click="avatarCropModal.zoom = Math.max(1, +(avatarCropModal.zoom - 0.2).toFixed(2))"
-                      class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">−</button>
+                      class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">?</button>
               <span class="text-xs font-mono w-10 text-center">{{ Math.round(avatarCropModal.zoom * 100) }}%</span>
               <button @click="avatarCropModal.zoom = Math.min(3, +(avatarCropModal.zoom + 0.2).toFixed(2))"
                       class="w-8 h-8 rounded-xl bg-black/[0.05] dark:bg-white/[0.06] hover:bg-black/[0.1] font-bold text-sm">+</button>
