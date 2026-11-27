@@ -143,11 +143,13 @@ const closeSplitChat = () => {
 };
 
 const sendSplitMessage = async () => {
+  if (uploadingSplitAttachment.value) return;
   if ((!splitMessageInput.value.trim() && splitPendingFiles.value.length === 0) || !splitChatId.value) return;
-  if (splitPendingFiles.value.length > 0) {
+  const filesToSend = [...splitPendingFiles.value];
+  if (filesToSend.length > 0) {
     uploadingSplitAttachment.value = true;
     try {
-      for (const item of splitPendingFiles.value) {
+      for (const item of filesToSend) {
         await chat.uploadAttachment(item.file, splitChatId.value);
         URL.revokeObjectURL(item.previewUrl);
       }
@@ -545,11 +547,13 @@ const openChat = async (c: any) => {
 };
 const goBackToList = () => { mobileView.value = 'list'; };
 const sendMessage = async () => {
+  if (uploadingAttachment.value) return;
   if (!messageInput.value.trim() && pendingFiles.value.length === 0) return;
-  if (pendingFiles.value.length > 0) {
+  const filesToSend = [...pendingFiles.value];
+  if (filesToSend.length > 0) {
     uploadingAttachment.value = true;
     try {
-      for (const item of pendingFiles.value) {
+      for (const item of filesToSend) {
         await chat.uploadAttachment(item.file);
         URL.revokeObjectURL(item.previewUrl);
       }
@@ -1041,8 +1045,10 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                      @touchmove="onMessageLongPressCancel"
                      style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
                      class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
-                  <div v-for="m in item.items" :key="m.id" class="aspect-square rounded-xl overflow-hidden bg-black/10">
-                    <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" draggable="false" class="w-full h-full object-cover pointer-events-none" loading="lazy">
+                  <div v-for="m in item.items" :key="m.id"
+                       @click="!isSelecting && m.type === 'Image' ? openAvatarViewer(item.items.filter((x: any) => x.type === 'Image').map((x: any) => getResolvedUrl(x.attachmentUrl)), item.items.filter((x: any) => x.type === 'Image').findIndex((x: any) => x.id === m.id)) : null"
+                       class="aspect-square rounded-xl overflow-hidden bg-black/10 cursor-pointer">
+                    <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" draggable="false" class="w-full h-full object-cover" loading="lazy">
                     <video v-else :src="getResolvedUrl(m.attachmentUrl)" controls class="w-full h-full object-cover"></video>
                   </div>
                 </div>
@@ -1160,10 +1166,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
                 <Video class="w-6 h-6" />
               </div>
-              <button @click="removePendingFile(idx, pendingFiles)"
+              <button v-if="!uploadingAttachment" @click="removePendingFile(idx, pendingFiles)"
                       class="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-500 transition-colors">
                 <X class="w-3 h-3" />
               </button>
+              <div v-else class="absolute inset-0 bg-black/45 flex items-center justify-center">
+                <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
             </div>
             <span class="text-[11px] font-mono text-slate-400 px-1 shrink-0">{{ pendingFiles.length }}/10</span>
           </div>
@@ -1217,8 +1226,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                       class="flex-1 min-w-0 bg-transparent border-none px-2 py-2 outline-none text-sm leading-tight placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:truncate select-text disabled:opacity-40 resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
                       style="field-sizing: content;"></textarea>
 
-            <button v-if="messageInput.trim() || pendingFiles.length > 0" @click="sendMessage" :disabled="!chat.activeChat"
-                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end">
+            <button v-if="messageInput.trim() || pendingFiles.length > 0" @click="sendMessage" :disabled="!chat.activeChat || uploadingAttachment"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end disabled:opacity-50">
               <Send class="w-5 h-5" />
             </button>
 
@@ -1295,7 +1304,9 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
             <div :class="['flex flex-col gap-0.5 max-w-xs sm:max-w-sm', item.primary.userId === auth.user?.id ? 'items-end' : 'items-start']">
               <span class="text-[10px] text-slate-400 dark:text-slate-500 px-1">{{ item.primary.emojiPrefix }} {{ item.primary.username }} · {{ formatTime(item.primary.sentAt) }}</span>
               <div class="grid grid-cols-2 gap-1 p-1.5 rounded-2xl border border-slate-200/80 dark:border-white/[0.08] bg-white/80 dark:bg-white/[0.04]">
-                <div v-for="m in item.items" :key="m.id" class="aspect-square rounded-xl overflow-hidden bg-black/10">
+                <div v-for="m in item.items" :key="m.id"
+                     @click="m.type === 'Image' ? openAvatarViewer(item.items.filter((x: any) => x.type === 'Image').map((x: any) => getResolvedUrl(x.attachmentUrl)), item.items.filter((x: any) => x.type === 'Image').findIndex((x: any) => x.id === m.id)) : null"
+                     class="aspect-square rounded-xl overflow-hidden bg-black/10 cursor-pointer">
                   <img v-if="m.type === 'Image'" :src="getResolvedUrl(m.attachmentUrl)" class="w-full h-full object-cover" loading="lazy">
                   <video v-else :src="getResolvedUrl(m.attachmentUrl)" controls class="w-full h-full object-cover"></video>
                 </div>
@@ -1339,10 +1350,13 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
               <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
                 <Video class="w-5 h-5" />
               </div>
-              <button @click="removePendingFile(idx, splitPendingFiles)"
+              <button v-if="!uploadingSplitAttachment" @click="removePendingFile(idx, splitPendingFiles)"
                       class="absolute top-1 right-1 w-4 h-4 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-red-500 transition-colors">
                 <X class="w-2.5 h-2.5" />
               </button>
+              <div v-else class="absolute inset-0 bg-black/45 flex items-center justify-center">
+                <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
             </div>
             <span class="text-[11px] font-mono text-slate-400 px-1 shrink-0">{{ splitPendingFiles.length }}/10</span>
           </div>
@@ -1394,8 +1408,8 @@ const currentAvatar = computed(() => auth.user?.avatarUrl || '');
                       class="flex-1 min-w-0 bg-transparent border-none px-2 py-2 outline-none text-sm leading-tight placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:truncate select-text resize-none max-h-32 overflow-y-auto thin-scroll text-slate-900 dark:text-slate-100"
                       style="field-sizing: content;"></textarea>
 
-            <button v-if="splitMessageInput.trim() || splitPendingFiles.length > 0" @click="sendSplitMessage"
-                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end">
+            <button v-if="splitMessageInput.trim() || splitPendingFiles.length > 0" @click="sendSplitMessage" :disabled="uploadingSplitAttachment"
+                    class="bg-[#3D7A5E] hover:bg-[#346950] text-white p-2.5 rounded-xl transition-colors shrink-0 self-end disabled:opacity-50">
               <Send class="w-5 h-5" />
             </button>
 
